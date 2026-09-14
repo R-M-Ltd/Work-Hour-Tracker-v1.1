@@ -1,28 +1,37 @@
 package com.example.workhourstracker.ui.screens
 
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.workhourstracker.data.DailyEntry
 import com.example.workhourstracker.data.WeekLog
+import com.example.workhourstracker.util.CsvExporter
 import com.example.workhourstracker.util.HoursCalc
 import com.example.workhourstracker.viewmodel.WorkHoursViewModel
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogScreen(viewModel: WorkHoursViewModel, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val weekLogs by viewModel.weekLogs.collectAsState()
     val allTimeTotal by viewModel.allTimeTotal.collectAsState()
+    var exporting by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -31,6 +40,49 @@ fun LogScreen(viewModel: WorkHoursViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            if (exporting) return@IconButton
+                            exporting = true
+                            scope.launch {
+                                try {
+                                    val weeks = viewModel.loadExportWeeks()
+                                    val rowCount = weeks.sumOf { it.second.size }
+                                    if (rowCount == 0) {
+                                        Toast.makeText(
+                                            context,
+                                            "Nothing to export yet",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        val csv = CsvExporter.buildCsv(weeks)
+                                        val intent = CsvExporter.shareCsv(context, csv)
+                                        context.startActivity(
+                                            Intent.createChooser(intent, "Export work hours CSV")
+                                        )
+                                        Toast.makeText(
+                                            context,
+                                            "Export includes archived weeks + current week ($rowCount days)",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        "Export failed: ${e.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } finally {
+                                    exporting = false
+                                }
+                            }
+                        },
+                        enabled = !exporting
+                    ) {
+                        Icon(Icons.Filled.Share, contentDescription = "Export CSV")
                     }
                 }
             )
@@ -46,7 +98,8 @@ fun LogScreen(viewModel: WorkHoursViewModel, onBack: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "Archived weeks only — this week's running total is on the Home screen.",
+                        "Archived weeks with hours only — empty weeks are hidden. " +
+                            "This week's running total is on the Home screen.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -54,7 +107,7 @@ fun LogScreen(viewModel: WorkHoursViewModel, onBack: () -> Unit) {
 
             if (weekLogs.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No completed weeks yet.")
+                    Text("No completed weeks with hours yet.")
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f)) {

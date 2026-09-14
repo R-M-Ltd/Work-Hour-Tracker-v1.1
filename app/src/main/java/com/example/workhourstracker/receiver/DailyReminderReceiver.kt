@@ -10,12 +10,15 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.workhourstracker.MainActivity
 import com.example.workhourstracker.R
+import com.example.workhourstracker.data.ReminderPreferences
 import com.example.workhourstracker.worker.ReminderScheduler
 
 class DailyReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        showNotification(context)
+        if (ReminderPreferences.isReminderEnabled(context)) {
+            showNotification(context)
+        }
         // Re-arm tomorrow's reminder — exact alarms are one-shot.
         ReminderScheduler.scheduleDailyReminder(context)
     }

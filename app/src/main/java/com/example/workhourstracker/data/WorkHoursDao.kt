@@ -21,8 +21,22 @@ interface WorkHoursDao {
     @Query("SELECT * FROM daily_entries WHERE dateEpochDay = :epochDay LIMIT 1")
     fun entryForDate(epochDay: Long): Flow<DailyEntry?>
 
+    @Query("SELECT * FROM daily_entries WHERE dateEpochDay = :epochDay LIMIT 1")
+    suspend fun entryForDateOnce(epochDay: Long): DailyEntry?
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertWeekLog(weekLog: WeekLog)
+    suspend fun insertWeekLog(weekLog: WeekLog): Long
+
+    @Query(
+        "UPDATE week_logs SET totalHours = :totalHours, weekEndEpochDay = :weekEndEpochDay, " +
+            "archivedAtEpochMillis = :archivedAtEpochMillis WHERE weekStartEpochDay = :startEpochDay"
+    )
+    suspend fun updateWeekLog(
+        startEpochDay: Long,
+        weekEndEpochDay: Long,
+        totalHours: Double,
+        archivedAtEpochMillis: Long = System.currentTimeMillis()
+    )
 
     @Query("SELECT EXISTS(SELECT 1 FROM week_logs WHERE weekStartEpochDay = :startEpochDay)")
     suspend fun weekLogExists(startEpochDay: Long): Boolean

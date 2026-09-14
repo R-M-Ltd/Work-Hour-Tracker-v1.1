@@ -6,19 +6,19 @@ Everything runs and stores data on-device.
 ## What it does
 - Work week = **Wednesday → Tuesday**.
 - Tap a day to set **clock in** and **clock out** (picker or spoken time) plus a comment.
+- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Clock-out requires clock-in first; these taps never invent lunch.
 - Optional **lunch start** and **lunch end**. If either is left blank, lunch did not occur and is not subtracted.
 - Hours are calculated from clock times (minus lunch when both lunch fields are set) and rounded to hundredths. Hours cannot be typed.
 - The current week's running total recalculates the instant any day is saved.
-- A local notification reminds you once a day to log your hours (default 6:00 PM).
+- A local notification reminds you once a day to log your hours (default 6:00 PM). Change the time or turn reminders off in **Settings**.
 - Every **Wednesday at 2:00 AM**, the just-finished week is archived into a history
-  log and the Home screen automatically starts showing the new week.
-- A History screen lists every archived week (expandable to per-day detail) and
-  shows your all-time total hours.
+  log (skipped when the week total is 0.0) and the Home screen automatically starts showing the new week.
+- A History screen lists archived weeks with hours (empty 0.0 weeks are hidden), expandable to per-day detail, shows your all-time total, and can **export CSV** (share sheet) of archived weeks + the current week’s daily rows.
 
 ## Opening the project
 1. Install **Android Studio** (Iguana or newer recommended).
 2. `File → Open` and select the `WorkHoursTracker` folder (this folder).
-3. Let Gradle sync — it will download AndrodX/Jetpack Compose, Room, and
+3. Let Gradle sync — it will download AndroidX/Jetpack Compose, Room, and
    WorkManager (all standard, no extra accounts or keys needed).
 4. Run on an emulator or device with **API 26 (Android 8.0)** or higher.
 
@@ -36,9 +36,11 @@ app/src/main/java/com/example/workhourstracker/
 │   ├── WeekLog.kt               # Room entity: one row per archived week
 │   ├── WorkHoursDao.kt          # Queries
 │   ├── WorkHoursDatabase.kt     # Room database singleton
-│   └── WorkHoursRepository.kt   # Week-boundary-aware data access
+│   ├── WorkHoursRepository.kt   # Week-boundary-aware data access
+│   └── ReminderPreferences.kt   # Reminder time + enabled flag
 ├── util/WeekUtils.kt            # All Wed→Tue date math lives here
 ├── util/HoursCalc.kt            # Clock-in/out → hours to hundredths
+├── util/CsvExporter.kt          # CSV build + FileProvider share intent
 ├── viewmodel/WorkHoursViewModel.kt
 ├── worker/
 │   ├── ReminderScheduler.kt     # Arms the daily + weekly AlarmManager alarms
@@ -50,14 +52,14 @@ app/src/main/java/com/example/workhourstracker/
 └── ui/
     ├── theme/Theme.kt
     ├── navigation/AppNavigation.kt
-    └── screens/HomeScreen.kt, EntryScreen.kt, LogScreen.kt
+    └── screens/HomeScreen.kt, EntryScreen.kt, LogScreen.kt, SettingsScreen.kt
 ```
 
 ## Design decisions worth knowing about
 - **Voice input** uses Android's built-in `RecognizerIntent` speech-to-text
   (the same system dialog Google Search/Assistant use) — no third-party speech
-  API or key required. The transcribed phrase is parsed for the first number
-  it contains and dropped into the hours field for the user to confirm/edit.
+  API or key required. The transcribed phrase is parsed for a spoken time and
+  applied to the active clock field for the user to confirm/edit.
 - **Data is never deleted.** Rather than wiping the previous week's rows at
   reset time, the Home screen always queries for whatever the *current*
   Wed–Tue window is. This means the weekly "reset" the user sees is really
@@ -65,6 +67,13 @@ app/src/main/java/com/example/workhourstracker/
   impossible for a bug in the reset job to accidentally lose unarchived hours.
   The Wednesday 2 AM job only adds a summary row to the history log; it never
   has to touch or delete the detailed daily rows.
+- **Empty weeks:** archives with 0.0 total hours are not inserted. History also
+  filters out any existing 0.0 `WeekLog` rows. If a week is re-archived, the
+  stored total is refreshed (mitigates insert-IGNORE staleness).
+- **CSV export** writes to app cache via `FileProvider` and opens the system
+  share sheet. Columns: week_start, date, clock_in, clock_out, lunch_out,
+  lunch_in, hours, comments. Includes all weeks that have daily rows (archived
+  + current).
 - **Exact alarms** (`AlarmManager.setExactAndAllowWhileIdle`) are used instead
   of `WorkManager`'s periodic work for both the daily reminder and the weekly
   reset, since periodic `WorkManager` jobs don't guarantee firing at a precise
@@ -77,5 +86,5 @@ app/src/main/java/com/example/workhourstracker/
 - No cloud backup/sync — purely local storage, per the "no further
   integration" requirement. A sync layer could be added later behind the same
   `WorkHoursRepository` interface without touching the UI.
-- The daily reminder time (6:00 PM) and notification text are hard-coded;
-  wiring up a Settings screen to change them would be a natural next step.
+- Week start day is fixed to Wednesday; theme follows the system (no in-app
+  theme picker).

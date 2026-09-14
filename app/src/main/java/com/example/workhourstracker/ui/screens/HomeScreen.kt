@@ -1,14 +1,18 @@
 package com.example.workhourstracker.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.workhourstracker.util.HoursCalc
@@ -23,16 +27,29 @@ import java.util.Locale
 fun HomeScreen(
     viewModel: WorkHoursViewModel,
     onDayClick: (LocalDate) -> Unit,
-    onViewLog: () -> Unit
+    onViewLog: () -> Unit,
+    onSettings: () -> Unit
 ) {
+    val context = LocalContext.current
     val entries by viewModel.currentWeekEntries.collectAsState()
     val weekStart by viewModel.weekStart.collectAsState()
     val daysInWeek = viewModel.daysInWeek(weekStart)
     val total = viewModel.runningTotal(entries)
     val today = LocalDate.now()
+    val todayEntry = viewModel.entryFor(today, entries)
+    val todayInThisWeek = daysInWeek.contains(today)
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("This Week") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("This Week") },
+                actions = {
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    }
+                }
+            )
+        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -56,20 +73,67 @@ fun HomeScreen(
                 }
             }
 
+            if (todayInThisWeek) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.clockInNow(today)
+                            Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Clock in now")
+                    }
+                    Button(
+                        onClick = {
+                            viewModel.clockOutNow(today) { ok ->
+                                Toast.makeText(
+                                    context,
+                                    if (ok) "Clocked out now"
+                                    else "Clock in first (or use a different time)",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        enabled = todayEntry?.clockInMinutes != null,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Clock out now")
+                    }
+                }
+                Text(
+                    "Sets today's time to right now. Lunch is not added — edit the day for lunch.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
             Spacer(Modifier.height(16.dp))
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(daysInWeek) { date ->
                     val entry = viewModel.entryFor(date, entries)
+                    val fullLabel = HoursCalc.formatDayLabel(
+                        entry?.clockInMinutes,
+                        entry?.clockOutMinutes,
+                        entry?.lunchOutMinutes,
+                        entry?.lunchInMinutes
+                    )
+                    val partialLabel = when {
+                        fullLabel != null -> fullLabel
+                        entry?.clockInMinutes != null ->
+                            "In ${HoursCalc.formatClock(entry.clockInMinutes!!)}"
+                        else -> null
+                    }
                     DayRow(
                         date = date,
                         hours = entry?.hoursWorked,
-                        clockLabel = HoursCalc.formatDayLabel(
-                            entry?.clockInMinutes,
-                            entry?.clockOutMinutes,
-                            entry?.lunchOutMinutes,
-                            entry?.lunchInMinutes
-                        ),
+                        clockLabel = partialLabel,
+                        hasEntry = entry != null,
                         comments = entry?.comments,
                         isToday = date == today,
                         onClick = { onDayClick(date) }
@@ -91,6 +155,7 @@ private fun DayRow(
     date: LocalDate,
     hours: Double?,
     clockLabel: String?,
+    hasEntry: Boolean,
     comments: String?,
     isToday: Boolean,
     onClick: () -> Unit
@@ -114,7 +179,13 @@ private fun DayRow(
             }
         }
         TextButton(onClick = onClick) {
-            Text(if (hours != null) formatHours(hours) else "Add")
+            Text(
+                when {
+                    hours != null && hours > 0.0 -> formatHours(hours)
+                    hasEntry -> "Edit"
+                    else -> "Add"
+                }
+            )
         }
     }
 }

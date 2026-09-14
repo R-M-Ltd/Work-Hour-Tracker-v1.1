@@ -5,6 +5,7 @@ import com.example.workhourstracker.util.WeekUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
+import java.time.LocalTime
 
 class WorkHoursRepository(private val dao: WorkHoursDao) {
 
@@ -50,41 +51,84 @@ class WorkHoursRepository(private val dao: WorkHoursDao) {
         )
     }
 
+    /**
+     * One-tap clock-in for [date] at [minutes] (minutes since midnight).
+     * Creates a new row if needed; does not invent lunch. Hours stay 0 until clock-out.
+     */
+    suspend fun clockInNow(date: LocalDate, minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute) {
+        val weekStart = WeekUtils.weekStartFor(date)
+        val existing = dao.entryForDateOnce(date.toEpochDay())
+        val clockOut = existing?.clockOutMinutes
+        val lunchOut = existing?.lunchOutMinutes
+        val lunchIn = existing?.lunchInMinutes
+        val hours = if (clockOut != null && clockOut != minutes) {
+            HoursCalc.hoursWorked(minutes, clockOut, lunchOut, lunchIn)
+        } else {
+            0.0
+        }
+        dao.upsertEntry(
+            DailyEntry(
+                dateEpochDay = date.toEpochDay(),
+                hoursWorked = hours,
+                comments = existing?.comments.orEmpty(),
+                weekStartEpochDay = weekStart.toEpochDay(),
+                clockInMinutes = minutes,
+                clockOutMinutes = if (clockOut != null && clockOut == minutes) null else clockOut,
+                lunchOutMinutes = lunchOut,
+                lunchInMinutes = lunchIn
+            )
+        )
+    }
+
+    /**
+     * One-tap clock-out for [date] at [minutes]. Requires an existing clock-in.
+     * Preserves lunch/comments if already set; does not invent lunch.
+     * @return false if there is no clock-in yet.
+     */
+    suspend fun clockOutNow(
+        date: LocalDate,
+        minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
+    ): Boolean {
+        val existing = dao.entryForDateOnce(date.toEpochDay())
+        val clockIn = existing?.clockInMinutes ?: return false
+        if (clockIn == minutes) return false
+        saveEntry(
+            date = date,
+            clockInMinutes = clockIn,
+            clockOutMinutes = minutes,
+            comments = existing.comments,
+            lunchOutMinutes = existing.lunchOutMinutes,
+            lunchInMinutes = existing.lunchInMinutes
+        )
+        return true
+    }
+
     fun allWeekLogs(): Flow<List<WeekLog>> = dao.allWeekLogs()
+
+    /** Week logs with meaningful hours only (empty 0.0 archives are hidden). */
+    fun visibleWeekLogs(): Flow<List<WeekLog>> =
+        dao.allWeekLogs().map { logs -> logs.filter { it.totalHours > 0.0 } }
 
     fun allTimeTotal(): Flow<Double> = dao.allTimeArchivedTotal().map { it ?: 0.0 }
 
     /**
      * Archives the week immediately before [referenceWeekStart] (defaults to the
      * current week, so by default this archives the week that just ended).
-     * Idempotent: safe to call more than once for the same week, e.g. if the
-     * device rebooted mid-archive and [com.example.workhourstracker.receiver.BootReceiver]
-     * re-triggers it.
+     * Idempotent: safe to call more than once for the same week.
+     * Empty weeks (0.0 hours) are not inserted; existing rows get their total refreshed.
      */
     suspend fun archivePreviousWeekIfNeeded(
         referenceWeekStart: LocalDate = WeekUtils.weekStartFor(LocalDate.now())
     ) {
         val completedWeekStart = WeekUtils.previousWeekStart(referenceWeekStart)
-        val startEpoch = completedWeekStart.toEpochDay()
-
-        if (dao.weekLogExists(startEpoch)) return
-
-        val entries = entriesForWeekOnce(completedWeekStart)
-        val total = entries.sumOf { it.hoursWorked }
-        dao.insertWeekLog(
-            WeekLog(
-                weekStartEpochDay = startEpoch,
-                weekEndEpochDay = WeekUtils.weekEndFor(completedWeekStart).toEpochDay(),
-                totalHours = total
-            )
-        )
+        upsertWeekArchive(completedWeekStart)
     }
 
     /**
      * Ensures history is not permanently skipped when the Wednesday 2 AM alarm
      * was missed (device off, exact-alarm denied, etc.). Always tries the week
      * that just ended, then backfills any older weeks that still have daily
-     * rows but no [WeekLog].
+     * rows but no [WeekLog] (or refreshes stale totals).
      */
     suspend fun catchUpWeekArchives() {
         val currentWeekStart = WeekUtils.weekStartFor(LocalDate.now())
@@ -92,16 +136,46 @@ class WorkHoursRepository(private val dao: WorkHoursDao) {
 
         val pending = dao.weekStartsWithEntriesBefore(currentWeekStart.toEpochDay())
         for (startEpoch in pending) {
-            if (dao.weekLogExists(startEpoch)) continue
-            val completedWeekStart = LocalDate.ofEpochDay(startEpoch)
-            val entries = entriesForWeekOnce(completedWeekStart)
-            dao.insertWeekLog(
-                WeekLog(
-                    weekStartEpochDay = startEpoch,
-                    weekEndEpochDay = WeekUtils.weekEndFor(completedWeekStart).toEpochDay(),
-                    totalHours = entries.sumOf { it.hoursWorked }
-                )
-            )
+            upsertWeekArchive(LocalDate.ofEpochDay(startEpoch))
         }
+    }
+
+    /**
+     * Insert a week summary when total &gt; 0; skip empty weeks.
+     * If a row already exists, update its total (mitigates IGNORE staleness).
+     * If total is 0 and a row exists, leave it — History UI filters zeros out.
+     */
+    private suspend fun upsertWeekArchive(completedWeekStart: LocalDate) {
+        val startEpoch = completedWeekStart.toEpochDay()
+        val weekEndEpoch = WeekUtils.weekEndFor(completedWeekStart).toEpochDay()
+        val entries = entriesForWeekOnce(completedWeekStart)
+        val total = entries.sumOf { it.hoursWorked }
+
+        if (dao.weekLogExists(startEpoch)) {
+            dao.updateWeekLog(
+                startEpochDay = startEpoch,
+                weekEndEpochDay = weekEndEpoch,
+                totalHours = total
+            )
+            return
+        }
+        if (total <= 0.0) return
+        dao.insertWeekLog(
+            WeekLog(
+                weekStartEpochDay = startEpoch,
+                weekEndEpochDay = weekEndEpoch,
+                totalHours = total
+            )
+        )
+    }
+
+    /** All daily rows for every archived week (by week start) plus the current week. */
+    suspend fun allEntriesForExport(): List<Pair<LocalDate, List<DailyEntry>>> {
+        val currentWeekStart = WeekUtils.weekStartFor(LocalDate.now())
+        val archivedStarts = dao.weekStartsWithEntriesBefore(currentWeekStart.toEpochDay() + 1)
+            .distinct()
+            .sorted()
+        val weekStarts = (archivedStarts.map { LocalDate.ofEpochDay(it) } + currentWeekStart).distinct()
+        return weekStarts.map { start -> start to entriesForWeekOnce(start) }
     }
 }

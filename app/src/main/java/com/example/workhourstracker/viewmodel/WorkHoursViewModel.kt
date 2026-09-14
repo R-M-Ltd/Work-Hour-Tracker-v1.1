@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalTime
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkHoursViewModel(private val repository: WorkHoursRepository) : ViewModel() {
@@ -37,7 +38,8 @@ class WorkHoursViewModel(private val repository: WorkHoursRepository) : ViewMode
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val weekLogs: StateFlow<List<WeekLog>> = repository.allWeekLogs()
+    /** Empty (0.0h) archived weeks are hidden from History. */
+    val weekLogs: StateFlow<List<WeekLog>> = repository.visibleWeekLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val allTimeTotal: StateFlow<Double> = repository.allTimeTotal()
@@ -63,8 +65,31 @@ class WorkHoursViewModel(private val repository: WorkHoursRepository) : ViewMode
         }
     }
 
+    fun clockInNow(date: LocalDate = LocalDate.now()) {
+        val now = LocalTime.now()
+        val minutes = now.hour * 60 + now.minute
+        viewModelScope.launch {
+            repository.clockInNow(date, minutes)
+        }
+    }
+
+    /**
+     * @param onResult true if saved; false if clock-in was missing or times equal.
+     */
+    fun clockOutNow(date: LocalDate = LocalDate.now(), onResult: (Boolean) -> Unit = {}) {
+        val now = LocalTime.now()
+        val minutes = now.hour * 60 + now.minute
+        viewModelScope.launch {
+            val ok = repository.clockOutNow(date, minutes)
+            onResult(ok)
+        }
+    }
+
     suspend fun loadEntriesForWeek(weekStart: LocalDate): List<DailyEntry> =
         repository.entriesForWeekOnce(weekStart)
+
+    suspend fun loadExportWeeks(): List<Pair<LocalDate, List<DailyEntry>>> =
+        repository.allEntriesForExport()
 
     /** Call from Activity.onResume so week window and entry query track the calendar. */
     fun onAppResume() {

@@ -26,15 +26,34 @@ object ReminderScheduler {
     private const val REQUEST_WEEKLY = 1002
 
     fun scheduleDailyReminder(context: Context, from: LocalDateTime = LocalDateTime.now()) {
+        if (!ReminderPreferences.isReminderEnabled(context)) {
+            cancelDailyReminder(context)
+            return
+        }
         val (hour, minute) = ReminderPreferences.getReminderTime(context)
         var next = from.toLocalDate().atTime(hour, minute)
         if (!next.isAfter(from)) next = next.plusDays(1)
         schedule(context, next, DailyReminderReceiver::class.java, REQUEST_DAILY)
     }
 
+    fun cancelDailyReminder(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(dailyPendingIntent(context))
+    }
+
     fun scheduleWeeklyReset(context: Context, from: LocalDateTime = LocalDateTime.now()) {
         val next = WeekUtils.nextWednesday2AM(from)
         schedule(context, next, WeeklyResetReceiver::class.java, REQUEST_WEEKLY)
+    }
+
+    private fun dailyPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, DailyReminderReceiver::class.java)
+        return PendingIntent.getBroadcast(
+            context,
+            REQUEST_DAILY,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     private fun schedule(context: Context, at: LocalDateTime, receiver: Class<*>, requestCode: Int) {
