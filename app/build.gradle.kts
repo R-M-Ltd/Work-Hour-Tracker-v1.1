@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.workhourstracker"
+    namespace = "com.rmltd.workhourstracker"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.workhourstracker"
+        applicationId = "com.rmltd.workhourstracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.2"
+        versionCode = 2
+        versionName = "1.3"
     }
 
     buildFeatures {

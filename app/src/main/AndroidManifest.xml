@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Re-arm alarms after a reboot, since exact alarms don't survive one -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Exact-time alarms for the daily reminder and Wednesday 2 AM reset -->
+    <!-- Exact-time alarms for the daily reminder and week-start 2 AM reset -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
