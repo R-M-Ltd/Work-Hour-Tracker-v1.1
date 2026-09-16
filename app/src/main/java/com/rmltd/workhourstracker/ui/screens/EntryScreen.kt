@@ -1,7 +1,10 @@
 package com.rmltd.workhourstracker.ui.screens
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -125,7 +128,7 @@ fun EntryScreen(
                     "Describe your shift, like clocked in at 7:30, lunch 12 to 12:30, out at 4"
                 is VoiceMode.Field -> "Say a time, like 7:30 AM"
             }
-            startSpeechRecognition(speechLauncher, prompt)
+            startSpeechRecognition(context, speechLauncher, prompt)
         } else {
             Toast.makeText(context, "Microphone permission denied — pick the time instead.", Toast.LENGTH_SHORT).show()
         }
@@ -355,6 +358,7 @@ private fun minutesFor(
 }
 
 private fun startSpeechRecognition(
+    context: Context,
     launcher: ManagedActivityResultLauncher<Intent, ActivityResult>,
     prompt: String
 ) {
@@ -363,5 +367,14 @@ private fun startSpeechRecognition(
         putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
     }
-    launcher.launch(intent)
+    val resolve = context.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+    if (resolve == null) {
+        Toast.makeText(context, "Speech recognition not available on this device", Toast.LENGTH_LONG).show()
+        return
+    }
+    try {
+        launcher.launch(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "Speech recognition not available on this device", Toast.LENGTH_LONG).show()
+    }
 }

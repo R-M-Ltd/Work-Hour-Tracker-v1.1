@@ -50,6 +50,13 @@ interface WorkHoursDao {
     @Query("SELECT SUM(totalHours) FROM week_logs")
     fun allTimeArchivedTotal(): Flow<Double?>
 
+    /** Distinct daily hours — avoids double-counting overlapping week_logs after week-start changes. */
+    @Query("SELECT SUM(hoursWorked) FROM daily_entries")
+    fun allTimeDailyTotal(): Flow<Double?>
+
+    @Query("DELETE FROM week_logs")
+    suspend fun deleteAllWeekLogs()
+
     /** Distinct week starts that have daily rows and are strictly before [beforeEpochDay]. */
     @Query(
         "SELECT DISTINCT weekStartEpochDay FROM daily_entries " +

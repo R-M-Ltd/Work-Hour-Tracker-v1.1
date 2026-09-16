@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.LocalDate
@@ -38,7 +39,6 @@ fun HomeScreen(
     val daysInWeek = viewModel.daysInWeek(weekStart)
     val total = viewModel.runningTotal(entries)
     val today = LocalDate.now()
-    val todayEntry = viewModel.entryFor(today, entries)
     val todayInThisWeek = daysInWeek.contains(today)
     val progress = if (weeklyGoal > 0.0) (total / weeklyGoal).toFloat().coerceIn(0f, 1f) else 0f
     val remaining = max(0.0, weeklyGoal - total)
@@ -122,23 +122,26 @@ fun HomeScreen(
                     }
                     Button(
                         onClick = {
-                            viewModel.clockOutNow(today) { ok ->
-                                Toast.makeText(
-                                    context,
-                                    if (ok) "Clocked out now"
-                                    else "Clock in first (or use a different time)",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                            viewModel.clockOutNow(today) { result ->
+                                val msg = when (result) {
+                                    ClockOutResult.SUCCESS -> "Clocked out now"
+                                    ClockOutResult.SUCCESS_OVERNIGHT ->
+                                        "Finished yesterday's overnight shift"
+                                    ClockOutResult.FAILED ->
+                                        "Clock in first (or use a different time)"
+                                }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
                         },
-                        enabled = todayEntry?.clockInMinutes != null,
+                        // Allow overnight: today may have no clock-in while yesterday is still open
+                        enabled = true,
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Clock out now")
                     }
                 }
                 Text(
-                    "Sets today's time to right now. Lunch is not added — edit the day for lunch.",
+                    "Sets today's time to right now (or finishes yesterday's open overnight shift). Lunch is not added — edit the day for lunch.",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 4.dp)
                 )

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.DailyEntry
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.data.WeekLog
@@ -90,14 +91,14 @@ class WorkHoursViewModel(
     }
 
     /**
-     * @param onResult true if saved; false if clock-in was missing or times equal.
+     * @param onResult [ClockOutResult] — may be overnight finish of yesterday's open shift.
      */
-    fun clockOutNow(date: LocalDate = LocalDate.now(), onResult: (Boolean) -> Unit = {}) {
+    fun clockOutNow(date: LocalDate = LocalDate.now(), onResult: (ClockOutResult) -> Unit = {}) {
         val now = LocalTime.now()
         val minutes = now.hour * 60 + now.minute
         viewModelScope.launch {
-            val ok = repository.clockOutNow(date, minutes)
-            onResult(ok)
+            val result = repository.clockOutNow(date, minutes)
+            onResult(result)
         }
     }
 
@@ -107,13 +108,23 @@ class WorkHoursViewModel(
     suspend fun loadExportWeeks(): List<Pair<LocalDate, List<DailyEntry>>> =
         repository.allEntriesForExport()
 
-    /** Call after Settings changes week start or weekly goal (Compose nav does not re-resume Activity). */
-    fun notifyPrefsChanged() {
+    /**
+     * Call after Settings changes week start or weekly goal (Compose nav does not re-resume Activity).
+     * When [weekStartChanged] is true, rebuild week_logs and rewrite daily weekStartEpochDay
+     * so overlapping old/new week keys cannot double-count History / all-time.
+     */
+    fun notifyPrefsChanged(weekStartChanged: Boolean = false) {
         _weeklyGoalHours.value = ReminderPreferences.getWeeklyGoalHours(appContext)
         _weekStartDay.value = weekStartDay()
         refreshWeekBoundary()
         viewModelScope.launch {
-            runCatching { repository.catchUpWeekArchives() }
+            runCatching {
+                if (weekStartChanged) {
+                    repository.rebuildWeekArchivesForCurrentPreference()
+                } else {
+                    repository.catchUpWeekArchives()
+                }
+            }
         }
     }
 

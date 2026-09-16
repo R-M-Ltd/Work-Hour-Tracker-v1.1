@@ -3,14 +3,15 @@
 A fully self-contained Android app — no backend, no API keys, no account sign-up.
 Everything runs and stores data on-device.
 
-**Application id / package:** `com.rmltd.workhourstracker`
+**Application id / package:** `com.rmltd.workhourstracker`  
+**Version:** 1.3.1 (versionCode 3)
 
 ## What it does
 - Work week start day is **configurable** in Settings (Sunday–Saturday). **Default remains Wednesday** (Wed → Tue).
 - Tap a day to set **clock in** and **clock out** (picker or spoken time) plus a comment.
 - On the **Entry** screen: **Speak whole shift** fills multiple fields from one utterance
   (e.g. “clocked in at 7:30, lunch 12 to 12:30, out at 4”). Per-field mic buttons remain.
-- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Clock-out requires clock-in first; these taps never invent lunch.
+- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Clock-in always writes today. Clock-out prefers today's open clock-in; if today has none, it finishes **yesterday's open overnight shift** (clock-in set, clock-out null) so HoursCalc overnight math applies on the start day's row. These taps never invent lunch.
 - Optional **lunch start** and **lunch end**. If either is left blank, lunch did not occur and is not subtracted.
 - Hours are calculated from clock times (minus lunch when both lunch fields are set) and rounded to hundredths. Hours cannot be typed.
 - **Weekly goal** (Settings, default **40.00** hours): Home shows a progress ring + remaining hours. Local preference only.
@@ -27,9 +28,8 @@ Everything runs and stores data on-device.
    WorkManager (all standard, no extra accounts or keys needed).
 4. Run on an emulator or device with **API 26 (Android 8.0)** or higher.
 
-The project doesn't include a custom app icon (`mipmap/ic_launcher`) — Android
-Studio's "Image Asset" tool (right-click `res` → New → Image Asset) will
-generate one in a few clicks, or you can just run it with the default icon.
+Launcher uses a vector `@drawable/ic_launcher` (no mipmap adaptive icons yet).
+Android Studio's "Image Asset" tool can generate adaptive mipmaps if desired.
 
 ## Project layout
 ```
@@ -66,6 +66,10 @@ app/src/main/java/com/rmltd/workhourstracker/
   (the same system dialog Google Search/Assistant use) — no third-party speech
   API or key required. Whole-shift mode parses labeled phrases (clock in / lunch /
   out) and falls back to ordered times; per-field mic still applies a single time.
+  Before launching, the app checks `resolveActivity` (and catches
+  `ActivityNotFoundException`) and toasts if no recognizer is installed; the
+  manifest declares `<queries>` for `RECOGNIZE_SPEECH` and marks the microphone
+  as optional.
 - **Data is never deleted.** Rather than wiping the previous week's rows at
   reset time, the Home screen always queries for whatever the *current*
   week window is (from the configured start day). This means the weekly "reset"
@@ -74,14 +78,17 @@ app/src/main/java/com/rmltd/workhourstracker/
   lose unarchived hours. The week-start 2 AM job only adds a summary row to the
   history log; it never has to touch or delete the detailed daily rows.
 - **Week-start preference:** daily rows stay keyed by epoch day. Changing the
-  start day recomputes Home / export week windows from the preference. Existing
-  `WeekLog` rows keep their historical start keys; new archives use the new day.
-  Changing the preference re-arms the weekly 2 AM alarm.
+  start day recomputes Home / export week windows, **rewrites** each row's
+  `weekStartEpochDay`, **deletes and rebuilds** `week_logs` from daily hours
+  under the new week definition (avoids overlapping old/new keys double-counting),
+  and re-arms the weekly 2 AM alarm. All-time total is the sum of distinct daily
+  `hoursWorked` (not a raw sum of possibly overlapping week logs).
 - **Empty weeks:** archives with 0.0 total hours are not inserted. History also
   filters out any existing 0.0 `WeekLog` rows. If a week is re-archived, the
   stored total is refreshed (mitigates insert-IGNORE staleness).
 - **CSV export** writes to app cache via `FileProvider` and opens the system
-  share sheet. Columns: week_start, date, clock_in, clock_out, lunch_out,
+  share sheet (`Intent.clipData` + `FLAG_GRANT_READ_URI_PERMISSION` so more OEMs
+  can read the URI). Columns: week_start, date, clock_in, clock_out, lunch_out,
   lunch_in, hours, comments. `week_start` is recomputed from the configured
   week-start day for every daily row.
 - **Exact alarms** (`AlarmManager.setExactAndAllowWhileIdle`) are used instead

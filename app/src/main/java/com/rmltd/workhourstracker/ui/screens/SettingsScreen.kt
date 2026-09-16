@@ -93,7 +93,7 @@ fun SettingsScreen(
                                 weekStartExpanded = false
                                 ReminderPreferences.setWeekStartDay(context, day)
                                 ReminderScheduler.scheduleWeeklyReset(context)
-                                viewModel.notifyPrefsChanged()
+                                viewModel.notifyPrefsChanged(weekStartChanged = true)
                                 Toast.makeText(
                                     context,
                                     "Week starts on ${day.getDisplayName(TextStyle.FULL, Locale.getDefault())}",

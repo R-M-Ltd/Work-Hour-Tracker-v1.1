@@ -48,6 +48,8 @@ object CsvExporter {
             type = "text/csv"
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_SUBJECT, "Work Hours Tracker export")
+            // ClipData is required on some OEMs for FileProvider URI grants to stick
+            clipData = android.content.ClipData.newRawUri("work_hours", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     }

@@ -8,6 +8,13 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
+/** Outcome of one-tap Home clock-out (may finish yesterday overnight). */
+enum class ClockOutResult {
+    SUCCESS,
+    SUCCESS_OVERNIGHT,
+    FAILED
+}
+
 class WorkHoursRepository(
     private val dao: WorkHoursDao,
     private val weekStartDay: () -> DayOfWeek = { DayOfWeek.WEDNESDAY }
@@ -90,26 +97,47 @@ class WorkHoursRepository(
     }
 
     /**
-     * One-tap clock-out for [date] at [minutes]. Requires an existing clock-in.
+     * One-tap clock-out for [date] at [minutes].
+     * Prefer today's open clock-in; if today has none, finish yesterday's open
+     * entry (clock-in set, clock-out null) so overnight Home clock-out works
+     * with [HoursCalc] overnight math on the start day's row.
      * Preserves lunch/comments if already set; does not invent lunch.
-     * @return false if there is no clock-in yet.
      */
     suspend fun clockOutNow(
         date: LocalDate,
         minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
-    ): Boolean {
-        val existing = dao.entryForDateOnce(date.toEpochDay())
-        val clockIn = existing?.clockInMinutes ?: return false
-        if (clockIn == minutes) return false
-        saveEntry(
-            date = date,
-            clockInMinutes = clockIn,
-            clockOutMinutes = minutes,
-            comments = existing.comments,
-            lunchOutMinutes = existing.lunchOutMinutes,
-            lunchInMinutes = existing.lunchInMinutes
-        )
-        return true
+    ): ClockOutResult {
+        val today = dao.entryForDateOnce(date.toEpochDay())
+        if (today?.clockInMinutes != null) {
+            val clockIn = today.clockInMinutes
+            if (clockIn == minutes) return ClockOutResult.FAILED
+            saveEntry(
+                date = date,
+                clockInMinutes = clockIn,
+                clockOutMinutes = minutes,
+                comments = today.comments,
+                lunchOutMinutes = today.lunchOutMinutes,
+                lunchInMinutes = today.lunchInMinutes
+            )
+            return ClockOutResult.SUCCESS
+        }
+
+        val yesterday = date.minusDays(1)
+        val prior = dao.entryForDateOnce(yesterday.toEpochDay())
+        val priorIn = prior?.clockInMinutes
+        if (prior != null && priorIn != null && prior.clockOutMinutes == null) {
+            if (priorIn == minutes) return ClockOutResult.FAILED
+            saveEntry(
+                date = yesterday,
+                clockInMinutes = priorIn,
+                clockOutMinutes = minutes,
+                comments = prior.comments,
+                lunchOutMinutes = prior.lunchOutMinutes,
+                lunchInMinutes = prior.lunchInMinutes
+            )
+            return ClockOutResult.SUCCESS_OVERNIGHT
+        }
+        return ClockOutResult.FAILED
     }
 
     fun allWeekLogs(): Flow<List<WeekLog>> = dao.allWeekLogs()
@@ -118,7 +146,8 @@ class WorkHoursRepository(
     fun visibleWeekLogs(): Flow<List<WeekLog>> =
         dao.allWeekLogs().map { logs -> logs.filter { it.totalHours > 0.0 } }
 
-    fun allTimeTotal(): Flow<Double> = dao.allTimeArchivedTotal().map { it ?: 0.0 }
+    /** Sum distinct daily hours so overlapping week_logs cannot inflate the total. */
+    fun allTimeTotal(): Flow<Double> = dao.allTimeDailyTotal().map { it ?: 0.0 }
 
     /**
      * Archives the week immediately before [referenceWeekStart] (defaults to the
@@ -176,6 +205,27 @@ class WorkHoursRepository(
                 totalHours = total
             )
         )
+    }
+
+    /**
+     * After the week-start preference changes: rewrite each daily row's
+     * [DailyEntry.weekStartEpochDay], clear overlapping [WeekLog] keys, and
+     * rebuild archives from daily rows under the new week definition.
+     */
+    suspend fun rebuildWeekArchivesForCurrentPreference() {
+        val day = startDay()
+        val all = dao.allEntries()
+        for (entry in all) {
+            val recomputed = WeekUtils.weekStartFor(
+                LocalDate.ofEpochDay(entry.dateEpochDay),
+                day
+            ).toEpochDay()
+            if (entry.weekStartEpochDay != recomputed) {
+                dao.upsertEntry(entry.copy(weekStartEpochDay = recomputed))
+            }
+        }
+        dao.deleteAllWeekLogs()
+        catchUpWeekArchives()
     }
 
     /**
