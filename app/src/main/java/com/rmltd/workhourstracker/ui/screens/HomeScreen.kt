@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
@@ -113,8 +114,17 @@ fun HomeScreen(
                 ) {
                     Button(
                         onClick = {
-                            viewModel.clockInNow(today)
-                            Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
+                            viewModel.clockInNow(today) { result ->
+                                val msg = when (result) {
+                                    ClockInResult.STARTED -> "Clocked in now"
+                                    ClockInResult.ALREADY_OPEN -> "Already clocked in"
+                                    ClockInResult.ALREADY_CLOSED ->
+                                        "Today is already clocked out — edit the day to change it"
+                                    ClockInResult.BLOCKED_OVERNIGHT ->
+                                        "Finish yesterday's shift first"
+                                }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -129,6 +139,8 @@ fun HomeScreen(
                                         "Finished yesterday's overnight shift"
                                     ClockOutResult.FAILED ->
                                         "Clock in first (or use a different time)"
+                                    ClockOutResult.ALREADY_CLOSED ->
+                                        "Today is already clocked out — edit the day to change it"
                                 }
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }

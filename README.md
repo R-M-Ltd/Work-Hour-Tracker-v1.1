@@ -4,14 +4,14 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.1 (versionCode 3)
+**Version:** 1.3.2 (versionCode 4)
 
 ## What it does
 - Work week start day is **configurable** in Settings (Sunday–Saturday). **Default remains Wednesday** (Wed → Tue).
 - Tap a day to set **clock in** and **clock out** (picker or spoken time) plus a comment.
 - On the **Entry** screen: **Speak whole shift** fills multiple fields from one utterance
   (e.g. “clocked in at 7:30, lunch 12 to 12:30, out at 4”). Per-field mic buttons remain.
-- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Clock-in always writes today. Clock-out prefers today's open clock-in; if today has none, it finishes **yesterday's open overnight shift** (clock-in set, clock-out null) so HoursCalc overnight math applies on the start day's row. These taps never invent lunch.
+- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Day state guards apply: **Empty** → clock-in starts an open row (hours 0.0); clock-out fails unless **yesterday is open overnight** (then finishes yesterday). **Open** → clock-in no-ops; clock-out closes today. **Closed** → neither button writes (edit the day instead). Clock-in never pairs a new in with a leftover out, and never invents lunch.
 - Optional **lunch start** and **lunch end**. If either is left blank, lunch did not occur and is not subtracted.
 - Hours are calculated from clock times (minus lunch when both lunch fields are set) and rounded to hundredths. Hours cannot be typed.
 - **Weekly goal** (Settings, default **40.00** hours): Home shows a progress ring + remaining hours. Local preference only.

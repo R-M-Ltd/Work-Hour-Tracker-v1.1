@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.DailyEntry
 import com.rmltd.workhourstracker.data.ReminderPreferences
@@ -82,11 +83,15 @@ class WorkHoursViewModel(
         }
     }
 
-    fun clockInNow(date: LocalDate = LocalDate.now()) {
+    /**
+     * @param onResult [ClockInResult] so Home can toast the actual outcome.
+     */
+    fun clockInNow(date: LocalDate = LocalDate.now(), onResult: (ClockInResult) -> Unit = {}) {
         val now = LocalTime.now()
         val minutes = now.hour * 60 + now.minute
         viewModelScope.launch {
-            repository.clockInNow(date, minutes)
+            val result = repository.clockInNow(date, minutes)
+            onResult(result)
         }
     }
 

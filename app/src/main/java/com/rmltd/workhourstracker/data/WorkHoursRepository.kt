@@ -8,11 +8,20 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
+/** Outcome of one-tap Home clock-in. */
+enum class ClockInResult {
+    STARTED,
+    ALREADY_OPEN,
+    ALREADY_CLOSED,
+    BLOCKED_OVERNIGHT
+}
+
 /** Outcome of one-tap Home clock-out (may finish yesterday overnight). */
 enum class ClockOutResult {
     SUCCESS,
     SUCCESS_OVERNIGHT,
-    FAILED
+    FAILED,
+    ALREADY_CLOSED
 }
 
 class WorkHoursRepository(
@@ -69,38 +78,50 @@ class WorkHoursRepository(
 
     /**
      * One-tap clock-in for [date] at [minutes] (minutes since midnight).
-     * Creates a new row if needed; does not invent lunch. Hours stay 0 until clock-out.
+     * Legal transitions only: Empty → open row (hours 0.0). Never pairs a new
+     * in with a leftover out. Open/Closed/overnight-blocked are no-ops.
      */
-    suspend fun clockInNow(date: LocalDate, minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute) {
-        val weekStart = WeekUtils.weekStartFor(date, startDay())
+    suspend fun clockInNow(
+        date: LocalDate,
+        minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
+    ): ClockInResult {
         val existing = dao.entryForDateOnce(date.toEpochDay())
-        val clockOut = existing?.clockOutMinutes
-        val lunchOut = existing?.lunchOutMinutes
-        val lunchIn = existing?.lunchInMinutes
-        val hours = if (clockOut != null && clockOut != minutes) {
-            HoursCalc.hoursWorked(minutes, clockOut, lunchOut, lunchIn)
-        } else {
-            0.0
+        val todayIn = existing?.clockInMinutes
+        val todayOut = existing?.clockOutMinutes
+
+        if (todayIn != null && todayOut != null) {
+            return ClockInResult.ALREADY_CLOSED
         }
+        if (todayIn != null) {
+            return ClockInResult.ALREADY_OPEN
+        }
+
+        // Empty today: block if yesterday still has an open overnight shift.
+        val prior = dao.entryForDateOnce(date.minusDays(1).toEpochDay())
+        if (prior != null && prior.clockInMinutes != null && prior.clockOutMinutes == null) {
+            return ClockInResult.BLOCKED_OVERNIGHT
+        }
+
+        val weekStart = WeekUtils.weekStartFor(date, startDay())
         dao.upsertEntry(
             DailyEntry(
                 dateEpochDay = date.toEpochDay(),
-                hoursWorked = hours,
+                hoursWorked = 0.0,
                 comments = existing?.comments.orEmpty(),
                 weekStartEpochDay = weekStart.toEpochDay(),
                 clockInMinutes = minutes,
-                clockOutMinutes = if (clockOut != null && clockOut == minutes) null else clockOut,
-                lunchOutMinutes = lunchOut,
-                lunchInMinutes = lunchIn
+                clockOutMinutes = null,
+                lunchOutMinutes = existing?.lunchOutMinutes,
+                lunchInMinutes = existing?.lunchInMinutes
             )
         )
+        return ClockInResult.STARTED
     }
 
     /**
      * One-tap clock-out for [date] at [minutes].
-     * Prefer today's open clock-in; if today has none, finish yesterday's open
-     * entry (clock-in set, clock-out null) so overnight Home clock-out works
-     * with [HoursCalc] overnight math on the start day's row.
+     * Open today → close today. Empty today + yesterday open → finish overnight.
+     * Closed today → no write. Empty with no overnight → FAILED.
      * Preserves lunch/comments if already set; does not invent lunch.
      */
     suspend fun clockOutNow(
@@ -108,12 +129,18 @@ class WorkHoursRepository(
         minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
     ): ClockOutResult {
         val today = dao.entryForDateOnce(date.toEpochDay())
-        if (today?.clockInMinutes != null) {
-            val clockIn = today.clockInMinutes
-            if (clockIn == minutes) return ClockOutResult.FAILED
+        val todayIn = today?.clockInMinutes
+        val todayOut = today?.clockOutMinutes
+
+        if (todayIn != null && todayOut != null) {
+            return ClockOutResult.ALREADY_CLOSED
+        }
+
+        if (today != null && todayIn != null) {
+            if (todayIn == minutes) return ClockOutResult.FAILED
             saveEntry(
                 date = date,
-                clockInMinutes = clockIn,
+                clockInMinutes = todayIn,
                 clockOutMinutes = minutes,
                 comments = today.comments,
                 lunchOutMinutes = today.lunchOutMinutes,
