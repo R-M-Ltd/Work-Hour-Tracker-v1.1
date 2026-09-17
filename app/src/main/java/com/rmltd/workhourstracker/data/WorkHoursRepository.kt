@@ -72,9 +72,6 @@ class WorkHoursRepository(
     suspend fun entryForDateOnce(date: LocalDate): DailyEntry? =
         dao.entryForDateOnce(date.toEpochDay())
 
-    fun entryForDateFlow(date: LocalDate): Flow<DailyEntry?> =
-        dao.entryForDate(date.toEpochDay())
-
     fun homeClockUi(today: LocalDate = LocalDate.now()): Flow<HomeClockUi> =
         combine(
             dao.entryForDate(today.toEpochDay()),
@@ -82,8 +79,6 @@ class WorkHoursRepository(
         ) { todayEntry, yesterdayEntry ->
             deriveHomeClockUi(todayEntry, yesterdayEntry)
         }
-
-    suspend fun findOpenEntry(): DailyEntry? = dao.findOpenEntry()
 
     /**
      * Saves a closed day (both clocks required by caller).
@@ -307,8 +302,6 @@ class WorkHoursRepository(
         }
         return@withLock ClockOutResult.FAILED
     }
-
-    fun allWeekLogs(): Flow<List<WeekLog>> = dao.allWeekLogs()
 
     /** Week logs with meaningful hours only (empty 0.0 archives are hidden). */
     fun visibleWeekLogs(): Flow<List<WeekLog>> =

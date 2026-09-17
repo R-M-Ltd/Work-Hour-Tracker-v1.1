@@ -6,14 +6,19 @@ import androidx.core.content.FileProvider
 import com.rmltd.workhourstracker.data.DailyEntry
 import java.io.File
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Builds a CSV of daily rows and shares it via the system share sheet (FileProvider).
+ * [buildCsv] is pure JVM (no Context) so unit tests can cover headers/rows/escaping.
  */
 object CsvExporter {
 
     private val dateFmt = DateTimeFormatter.ISO_LOCAL_DATE
+    /** Export clocks are Locale.US so CSV content is stable across devices. */
+    private val clockFmt = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 
     fun buildCsv(weeks: List<Pair<LocalDate, List<DailyEntry>>>): String {
         val sb = StringBuilder()
@@ -54,8 +59,11 @@ object CsvExporter {
         }
     }
 
-    private fun csvClock(minutes: Int?): String =
-        if (minutes == null) "" else HoursCalc.formatClock(minutes)
+    private fun csvClock(minutes: Int?): String {
+        if (minutes == null) return ""
+        val time = LocalTime.of(minutes / 60, minutes % 60)
+        return time.format(clockFmt)
+    }
 
     private fun csvEscape(value: String): String {
         if (value.isEmpty()) return ""

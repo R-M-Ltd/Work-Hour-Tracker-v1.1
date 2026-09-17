@@ -11,8 +11,8 @@ import java.time.LocalDate
  * Pure unit coverage for [WorkHoursRepository.deriveHomeClockUi]
  * (Empty / Open / Closed / overnight-pending / legacy).
  *
- * clockInNow / clockOutNow transitions still need instrumented or in-memory Room
- * tests (DAO + mutex + upsert paths).
+ * clockInNow / clockOutNow / saveEntry / discard still need instrumented or
+ * in-memory Room tests (DAO + mutex + upsert) via local SDK / gradlew.
  */
 class HomeClockUiTest {
 
