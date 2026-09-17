@@ -98,8 +98,9 @@ fun LogScreen(viewModel: WorkHoursViewModel, onBack: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "Archived weeks with hours only — empty weeks are hidden. " +
-                            "This week's running total is on the Home screen.",
+                        "Sum of all logged days (including this week). " +
+                            "Archived weeks with hours are listed below; empty weeks are hidden. " +
+                            "This week's running total is also on the Home screen.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

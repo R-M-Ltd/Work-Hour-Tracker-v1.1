@@ -10,6 +10,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -37,12 +40,16 @@ fun HomeScreen(
     val entries by viewModel.currentWeekEntries.collectAsState()
     val weekStart by viewModel.weekStart.collectAsState()
     val weeklyGoal by viewModel.weeklyGoalHours.collectAsState()
+    val homeClock by viewModel.homeClockUi.collectAsState()
+    val clockBusy by viewModel.clockOpInProgress.collectAsState()
     val daysInWeek = viewModel.daysInWeek(weekStart)
     val total = viewModel.runningTotal(entries)
     val today = LocalDate.now()
     val todayInThisWeek = daysInWeek.contains(today)
     val progress = if (weeklyGoal > 0.0) (total / weeklyGoal).toFloat().coerceIn(0f, 1f) else 0f
     val remaining = max(0.0, weeklyGoal - total)
+
+    var showOvernightDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -108,24 +115,44 @@ fun HomeScreen(
 
             if (todayInThisWeek) {
                 Spacer(Modifier.height(12.dp))
+                if (homeClock.overnightPending) {
+                    Text(
+                        "Yesterday's shift is still open. Clock out finishes it, or use Clock in for options.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
                         onClick = {
+                            if (homeClock.overnightPending) {
+                                showOvernightDialog = true
+                                return@Button
+                            }
                             viewModel.clockInNow(today) { result ->
-                                val msg = when (result) {
-                                    ClockInResult.STARTED -> "Clocked in now"
-                                    ClockInResult.ALREADY_OPEN -> "Already clocked in"
-                                    ClockInResult.ALREADY_CLOSED ->
-                                        "Today is already clocked out — edit the day to change it"
-                                    ClockInResult.BLOCKED_OVERNIGHT ->
-                                        "Finish yesterday's shift first"
+                                when (result) {
+                                    ClockInResult.BLOCKED_OVERNIGHT -> {
+                                        showOvernightDialog = true
+                                    }
+                                    else -> {
+                                        val msg = when (result) {
+                                            ClockInResult.STARTED -> "Clocked in now"
+                                            ClockInResult.ALREADY_OPEN -> "Already clocked in"
+                                            ClockInResult.ALREADY_CLOSED ->
+                                                "Today already has hours — edit the day to change it"
+                                            ClockInResult.BLOCKED_OVERNIGHT ->
+                                                "Finish yesterday's shift first"
+                                        }
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    }
                                 }
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
                         },
+                        enabled = homeClock.clockInEnabled && !clockBusy,
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Clock in now")
@@ -145,8 +172,7 @@ fun HomeScreen(
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
                         },
-                        // Allow overnight: today may have no clock-in while yesterday is still open
-                        enabled = true,
+                        enabled = homeClock.clockOutEnabled && !clockBusy,
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Clock out now")
@@ -194,6 +220,68 @@ fun HomeScreen(
                 Text("View History & To-Date Hours")
             }
         }
+    }
+
+    if (showOvernightDialog) {
+        val yesterday = homeClock.openOvernightDate ?: today.minusDays(1)
+        AlertDialog(
+            onDismissRequest = { showOvernightDialog = false },
+            title = { Text("Yesterday's shift is still open") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Finish the overnight shift, edit yesterday's times, or discard the open punch and clock in today."
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = {
+                            showOvernightDialog = false
+                            viewModel.clockOutNow(today) { result ->
+                                val msg = when (result) {
+                                    ClockOutResult.SUCCESS_OVERNIGHT ->
+                                        "Finished yesterday's overnight shift"
+                                    ClockOutResult.SUCCESS -> "Clocked out now"
+                                    ClockOutResult.FAILED ->
+                                        "Could not finish overnight — try editing yesterday"
+                                    ClockOutResult.ALREADY_CLOSED ->
+                                        "Today is already clocked out"
+                                }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Finish overnight (clock out now)") }
+                    TextButton(
+                        onClick = {
+                            showOvernightDialog = false
+                            onDayClick(yesterday)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Edit yesterday") }
+                    TextButton(
+                        onClick = {
+                            showOvernightDialog = false
+                            viewModel.discardOvernightAndClockIn(today) { result ->
+                                val msg = when (result) {
+                                    ClockInResult.STARTED ->
+                                        "Discarded yesterday's punch and clocked in"
+                                    ClockInResult.ALREADY_OPEN -> "Already clocked in"
+                                    ClockInResult.ALREADY_CLOSED ->
+                                        "Today already has hours — edit the day"
+                                    ClockInResult.BLOCKED_OVERNIGHT ->
+                                        "Still blocked — try again"
+                                }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Discard open punch & clock in today") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showOvernightDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 

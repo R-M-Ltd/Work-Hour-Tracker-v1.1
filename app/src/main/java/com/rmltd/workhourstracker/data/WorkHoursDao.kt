@@ -12,6 +12,9 @@ interface WorkHoursDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEntry(entry: DailyEntry)
 
+    @Query("DELETE FROM daily_entries WHERE dateEpochDay = :epochDay")
+    suspend fun deleteEntry(epochDay: Long)
+
     @Query("SELECT * FROM daily_entries WHERE dateEpochDay BETWEEN :startEpochDay AND :endEpochDay ORDER BY dateEpochDay ASC")
     fun entriesForWeek(startEpochDay: Long, endEpochDay: Long): Flow<List<DailyEntry>>
 
@@ -26,6 +29,13 @@ interface WorkHoursDao {
 
     @Query("SELECT * FROM daily_entries WHERE dateEpochDay = :epochDay LIMIT 1")
     suspend fun entryForDateOnce(epochDay: Long): DailyEntry?
+
+    /** Open punch: clock-in set, no clock-out (overnight or same-day open). */
+    @Query(
+        "SELECT * FROM daily_entries WHERE clockInMinutes IS NOT NULL AND clockOutMinutes IS NULL " +
+            "ORDER BY dateEpochDay DESC LIMIT 1"
+    )
+    suspend fun findOpenEntry(): DailyEntry?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWeekLog(weekLog: WeekLog): Long

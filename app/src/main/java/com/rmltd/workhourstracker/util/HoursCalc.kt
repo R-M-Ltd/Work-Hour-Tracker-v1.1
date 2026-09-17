@@ -10,6 +10,8 @@ import kotlin.math.round
  *
  * Minutes are minutes-from-midnight (0..1439).
  * Times that fall before clock-in are treated as after midnight (overnight).
+ * When [equalOutMeansFullDay] is true and out equals in, treat as a full 24h
+ * overnight finish (Home clock-out across midnight with matching wall times).
  *
  * Lunch is optional. If either lunch time is missing, lunch did not occur.
  */
@@ -33,19 +35,27 @@ object HoursCalc {
         clockInMinutes: Int,
         clockOutMinutes: Int,
         lunchOutMinutes: Int? = null,
-        lunchInMinutes: Int? = null
-    ): Double = worked(clockInMinutes, clockOutMinutes, lunchOutMinutes, lunchInMinutes).hours
+        lunchInMinutes: Int? = null,
+        equalOutMeansFullDay: Boolean = false
+    ): Double = worked(
+        clockInMinutes,
+        clockOutMinutes,
+        lunchOutMinutes,
+        lunchInMinutes,
+        equalOutMeansFullDay
+    ).hours
 
     fun worked(
         clockInMinutes: Int,
         clockOutMinutes: Int,
         lunchOutMinutes: Int? = null,
-        lunchInMinutes: Int? = null
+        lunchInMinutes: Int? = null,
+        equalOutMeansFullDay: Boolean = false
     ): Worked {
         requireValid(clockInMinutes)
         requireValid(clockOutMinutes)
-        val outOnTimeline = expand(clockOutMinutes, clockInMinutes)
-        val overnight = clockOutMinutes < clockInMinutes
+        val overnight = isOvernight(clockInMinutes, clockOutMinutes, equalOutMeansFullDay)
+        val outOnTimeline = expand(clockOutMinutes, clockInMinutes, equalOutMeansFullDay)
         val gross = outOnTimeline - clockInMinutes
 
         val lunch = usableLunch(clockInMinutes, outOnTimeline, lunchOutMinutes, lunchInMinutes)
@@ -61,8 +71,13 @@ object HoursCalc {
         )
     }
 
-    fun isOvernight(clockInMinutes: Int, clockOutMinutes: Int): Boolean =
-        clockOutMinutes < clockInMinutes
+    fun isOvernight(
+        clockInMinutes: Int,
+        clockOutMinutes: Int,
+        equalOutMeansFullDay: Boolean = false
+    ): Boolean =
+        clockOutMinutes < clockInMinutes ||
+            (equalOutMeansFullDay && clockOutMinutes == clockInMinutes)
 
     fun formatClock(minutesFromMidnight: Int): String {
         val time = LocalTime.of(minutesFromMidnight / 60, minutesFromMidnight % 60)
@@ -107,8 +122,11 @@ object HoursCalc {
     }
 
     /** Map a clock time onto the timeline that starts at [origin] (clock-in). */
-    private fun expand(time: Int, origin: Int): Int =
-        if (time < origin) time + MINUTES_PER_DAY else time
+    private fun expand(time: Int, origin: Int, equalMeansNextDay: Boolean = false): Int = when {
+        time < origin -> time + MINUTES_PER_DAY
+        equalMeansNextDay && time == origin -> time + MINUTES_PER_DAY
+        else -> time
+    }
 
     private fun requireValid(minutes: Int) {
         require(minutes in 0 until MINUTES_PER_DAY) { "minutes out of range: $minutes" }

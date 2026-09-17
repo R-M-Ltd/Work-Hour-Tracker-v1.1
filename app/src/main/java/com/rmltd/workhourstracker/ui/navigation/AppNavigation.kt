@@ -44,10 +44,16 @@ fun AppNavHost(
             arguments = listOf(navArgument(Routes.ENTRY_ARG) { type = NavType.LongType })
         ) { backStackEntry ->
             val epochDay = backStackEntry.arguments?.getLong(Routes.ENTRY_ARG) ?: LocalDate.now().toEpochDay()
+            val entryDate = LocalDate.ofEpochDay(epochDay)
             EntryScreen(
-                date = LocalDate.ofEpochDay(epochDay),
+                date = entryDate,
                 viewModel = viewModel,
-                onDone = { navController.popBackStack() }
+                onDone = { navController.popBackStack() },
+                onEditOpenDay = { openDate ->
+                    navController.navigate(Routes.entry(openDate)) {
+                        popUpTo(Routes.entry(entryDate)) { inclusive = true }
+                    }
+                }
             )
         }
 

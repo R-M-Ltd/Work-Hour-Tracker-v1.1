@@ -4,14 +4,15 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.2 (versionCode 4)
+**Version:** 1.3.3 (versionCode 5)
 
 ## What it does
 - Work week start day is **configurable** in Settings (Sunday–Saturday). **Default remains Wednesday** (Wed → Tue).
 - Tap a day to set **clock in** and **clock out** (picker or spoken time) plus a comment.
 - On the **Entry** screen: **Speak whole shift** fills multiple fields from one utterance
   (e.g. “clocked in at 7:30, lunch 12 to 12:30, out at 4”). Per-field mic buttons remain.
-- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Day state guards apply: **Empty** → clock-in starts an open row (hours 0.0); clock-out fails unless **yesterday is open overnight** (then finishes yesterday). **Open** → clock-in no-ops; clock-out closes today. **Closed** → neither button writes (edit the day instead). Clock-in never pairs a new in with a leftover out, and never invents lunch.
+- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Buttons enable/disable from day state (Empty / Open / Closed / overnight-pending). **Empty** → clock-in starts an open row (hours 0.0); clock-out fails unless **yesterday is open overnight** (then finishes yesterday, including equal wall times as a 24.00h shift). **Open** → clock-in disabled; clock-out closes today. **Closed** (or legacy hours-only) → clock-in disabled / toast to edit. **Overnight pending** → clock-in opens a dialog: finish overnight, edit yesterday, or discard the open punch and clock in today. Clock ops are single-flight (rapid taps ignored). Clock-in never pairs a new in with a leftover out, and never invents lunch.
+- **Entry** save refuses another day while an open overnight exists (dialog: edit open day / discard & save). Overnight clock-out earlier than clock-in asks for confirmation before save.
 - Optional **lunch start** and **lunch end**. If either is left blank, lunch did not occur and is not subtracted.
 - Hours are calculated from clock times (minus lunch when both lunch fields are set) and rounded to hundredths. Hours cannot be typed.
 - **Weekly goal** (Settings, default **40.00** hours): Home shows a progress ring + remaining hours. Local preference only.
@@ -19,7 +20,7 @@ Everything runs and stores data on-device.
 - A local notification reminds you once a day to log your hours (default 6:00 PM). Change the time or turn reminders off in **Settings**. The reminder is **skipped** if today already has a clock-out.
 - At **2:00 AM on the configured week-start day**, the just-finished week is archived into a history
   log (skipped when the week total is 0.0) and the Home screen automatically starts showing the new week.
-- A History screen lists archived weeks with hours (empty 0.0 weeks are hidden), expandable to per-day detail, shows your all-time total, and can **export CSV** (share sheet) of daily rows grouped by the **configured** week-start preference.
+- A History screen lists archived weeks with hours (empty 0.0 weeks are hidden), expandable to per-day detail, shows your all-time total as the **sum of all logged days (including this week)**, and can **export CSV** (share sheet) of daily rows grouped by the **configured** week-start preference.
 
 ## Opening the project
 1. Install **Android Studio** (Iguana or newer recommended).

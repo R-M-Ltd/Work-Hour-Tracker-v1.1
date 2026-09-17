@@ -3,7 +3,10 @@ package com.rmltd.workhourstracker.data
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.WeekUtils
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -24,10 +27,29 @@ enum class ClockOutResult {
     ALREADY_CLOSED
 }
 
+/** Outcome of Entry save when an open overnight exists on another day. */
+sealed class SaveEntryResult {
+    data object Saved : SaveEntryResult()
+    data class BlockedOvernightOpen(val openDate: LocalDate) : SaveEntryResult()
+}
+
+/**
+ * Home clock button / overnight UI derived from today + yesterday rows.
+ * Overnight-pending keeps clock-in enabled so Home can show the resolve dialog (H2).
+ */
+data class HomeClockUi(
+    val clockInEnabled: Boolean,
+    val clockOutEnabled: Boolean,
+    val overnightPending: Boolean,
+    val openOvernightDate: LocalDate? = null
+)
+
 class WorkHoursRepository(
     private val dao: WorkHoursDao,
     private val weekStartDay: () -> DayOfWeek = { DayOfWeek.WEDNESDAY }
 ) {
+
+    private val clockMutex = Mutex()
 
     private fun startDay(): DayOfWeek = weekStartDay()
 
@@ -50,18 +72,74 @@ class WorkHoursRepository(
     suspend fun entryForDateOnce(date: LocalDate): DailyEntry? =
         dao.entryForDateOnce(date.toEpochDay())
 
+    fun entryForDateFlow(date: LocalDate): Flow<DailyEntry?> =
+        dao.entryForDate(date.toEpochDay())
+
+    fun homeClockUi(today: LocalDate = LocalDate.now()): Flow<HomeClockUi> =
+        combine(
+            dao.entryForDate(today.toEpochDay()),
+            dao.entryForDate(today.minusDays(1).toEpochDay())
+        ) { todayEntry, yesterdayEntry ->
+            deriveHomeClockUi(todayEntry, yesterdayEntry)
+        }
+
+    suspend fun findOpenEntry(): DailyEntry? = dao.findOpenEntry()
+
+    /**
+     * Saves a closed day (both clocks required by caller).
+     * Blocks if another day has an open overnight punch, unless [date] is that open day
+     * (finishing it) or [forceAfterDiscard] after discarding the open punch.
+     */
     suspend fun saveEntry(
         date: LocalDate,
         clockInMinutes: Int,
         clockOutMinutes: Int,
         comments: String,
         lunchOutMinutes: Int? = null,
-        lunchInMinutes: Int? = null
+        lunchInMinutes: Int? = null,
+        forceAfterDiscard: Boolean = false,
+        equalOutMeansFullDay: Boolean = false
+    ): SaveEntryResult {
+        if (!forceAfterDiscard) {
+            val open = dao.findOpenEntry()
+            if (open != null && open.dateEpochDay != date.toEpochDay()) {
+                return SaveEntryResult.BlockedOvernightOpen(
+                    LocalDate.ofEpochDay(open.dateEpochDay)
+                )
+            }
+        }
+        upsertClosedEntry(
+            date,
+            clockInMinutes,
+            clockOutMinutes,
+            comments,
+            lunchOutMinutes,
+            lunchInMinutes,
+            equalOutMeansFullDay
+        )
+        return SaveEntryResult.Saved
+    }
+
+    /** Unchecked write used by clock-out paths (already inside mutex / state checks). */
+    private suspend fun upsertClosedEntry(
+        date: LocalDate,
+        clockInMinutes: Int,
+        clockOutMinutes: Int,
+        comments: String,
+        lunchOutMinutes: Int? = null,
+        lunchInMinutes: Int? = null,
+        equalOutMeansFullDay: Boolean = false
     ) {
         val weekStart = WeekUtils.weekStartFor(date, startDay())
         val lunchOut = if (lunchOutMinutes != null && lunchInMinutes != null) lunchOutMinutes else null
         val lunchIn = if (lunchOutMinutes != null && lunchInMinutes != null) lunchInMinutes else null
-        val hours = HoursCalc.hoursWorked(clockInMinutes, clockOutMinutes, lunchOut, lunchIn)
+        val hours = HoursCalc.hoursWorked(
+            clockInMinutes,
+            clockOutMinutes,
+            lunchOut,
+            lunchIn,
+            equalOutMeansFullDay = equalOutMeansFullDay
+        )
         dao.upsertEntry(
             DailyEntry(
                 dateEpochDay = date.toEpochDay(),
@@ -77,14 +155,71 @@ class WorkHoursRepository(
     }
 
     /**
+     * Deletes an open punch (in set, out null) for [date]. No-op if not open.
+     * @return true if a row was removed.
+     */
+    suspend fun discardOpenPunch(date: LocalDate): Boolean = clockMutex.withLock {
+        discardOpenPunchUnlocked(date)
+    }
+
+    private suspend fun discardOpenPunchUnlocked(date: LocalDate): Boolean {
+        val entry = dao.entryForDateOnce(date.toEpochDay()) ?: return false
+        if (entry.clockInMinutes == null || entry.clockOutMinutes != null) return false
+        dao.deleteEntry(date.toEpochDay())
+        return true
+    }
+
+    /**
+     * Discard yesterday's open overnight (if any) then clock in today.
+     * Single-flight with other clock ops.
+     */
+    suspend fun discardOvernightAndClockIn(
+        date: LocalDate,
+        minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
+    ): ClockInResult = clockMutex.withLock {
+        discardOpenPunchUnlocked(date.minusDays(1))
+        clockInNowUnlocked(date, minutes)
+    }
+
+    /**
+     * Discard any open punch on a different day, then save [date] closed.
+     */
+    suspend fun discardOpenAndSaveEntry(
+        date: LocalDate,
+        clockInMinutes: Int,
+        clockOutMinutes: Int,
+        comments: String,
+        lunchOutMinutes: Int? = null,
+        lunchInMinutes: Int? = null
+    ): SaveEntryResult = clockMutex.withLock {
+        val open = dao.findOpenEntry()
+        if (open != null && open.dateEpochDay != date.toEpochDay()) {
+            discardOpenPunchUnlocked(LocalDate.ofEpochDay(open.dateEpochDay))
+        }
+        upsertClosedEntry(
+            date,
+            clockInMinutes,
+            clockOutMinutes,
+            comments,
+            lunchOutMinutes,
+            lunchInMinutes
+        )
+        SaveEntryResult.Saved
+    }
+
+    /**
      * One-tap clock-in for [date] at [minutes] (minutes since midnight).
      * Legal transitions only: Empty → open row (hours 0.0). Never pairs a new
-     * in with a leftover out. Open/Closed/overnight-blocked are no-ops.
+     * in with a leftover out. Open/Closed/overnight-blocked/legacy are no-ops.
      */
     suspend fun clockInNow(
         date: LocalDate,
         minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
-    ): ClockInResult {
+    ): ClockInResult = clockMutex.withLock {
+        clockInNowUnlocked(date, minutes)
+    }
+
+    private suspend fun clockInNowUnlocked(date: LocalDate, minutes: Int): ClockInResult {
         val existing = dao.entryForDateOnce(date.toEpochDay())
         val todayIn = existing?.clockInMinutes
         val todayOut = existing?.clockOutMinutes
@@ -94,6 +229,10 @@ class WorkHoursRepository(
         }
         if (todayIn != null) {
             return ClockInResult.ALREADY_OPEN
+        }
+        // Legacy hours-only row (migrated): treat as closed — do not wipe.
+        if (existing != null && existing.hoursWorked > 0.0) {
+            return ClockInResult.ALREADY_CLOSED
         }
 
         // Empty today: block if yesterday still has an open overnight shift.
@@ -122,23 +261,24 @@ class WorkHoursRepository(
      * One-tap clock-out for [date] at [minutes].
      * Open today → close today. Empty today + yesterday open → finish overnight.
      * Closed today → no write. Empty with no overnight → FAILED.
-     * Preserves lunch/comments if already set; does not invent lunch.
+     * Overnight finish allows equal wall-clock minutes (24.00h). Same-day close still rejects equal.
      */
     suspend fun clockOutNow(
         date: LocalDate,
         minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
-    ): ClockOutResult {
+    ): ClockOutResult = clockMutex.withLock {
         val today = dao.entryForDateOnce(date.toEpochDay())
         val todayIn = today?.clockInMinutes
         val todayOut = today?.clockOutMinutes
 
         if (todayIn != null && todayOut != null) {
-            return ClockOutResult.ALREADY_CLOSED
+            return@withLock ClockOutResult.ALREADY_CLOSED
         }
 
         if (today != null && todayIn != null) {
-            if (todayIn == minutes) return ClockOutResult.FAILED
-            saveEntry(
+            // Same calendar day: still reject identical wall times (0h).
+            if (todayIn == minutes) return@withLock ClockOutResult.FAILED
+            upsertClosedEntry(
                 date = date,
                 clockInMinutes = todayIn,
                 clockOutMinutes = minutes,
@@ -146,25 +286,26 @@ class WorkHoursRepository(
                 lunchOutMinutes = today.lunchOutMinutes,
                 lunchInMinutes = today.lunchInMinutes
             )
-            return ClockOutResult.SUCCESS
+            return@withLock ClockOutResult.SUCCESS
         }
 
         val yesterday = date.minusDays(1)
         val prior = dao.entryForDateOnce(yesterday.toEpochDay())
         val priorIn = prior?.clockInMinutes
         if (prior != null && priorIn != null && prior.clockOutMinutes == null) {
-            if (priorIn == minutes) return ClockOutResult.FAILED
-            saveEntry(
+            // Equal wall times OK for overnight → 24.00h via HoursCalc.
+            upsertClosedEntry(
                 date = yesterday,
                 clockInMinutes = priorIn,
                 clockOutMinutes = minutes,
                 comments = prior.comments,
                 lunchOutMinutes = prior.lunchOutMinutes,
-                lunchInMinutes = prior.lunchInMinutes
+                lunchInMinutes = prior.lunchInMinutes,
+                equalOutMeansFullDay = priorIn == minutes
             )
-            return ClockOutResult.SUCCESS_OVERNIGHT
+            return@withLock ClockOutResult.SUCCESS_OVERNIGHT
         }
-        return ClockOutResult.FAILED
+        return@withLock ClockOutResult.FAILED
     }
 
     fun allWeekLogs(): Flow<List<WeekLog>> = dao.allWeekLogs()
@@ -267,5 +408,38 @@ class WorkHoursRepository(
             .groupBy { WeekUtils.weekStartFor(LocalDate.ofEpochDay(it.dateEpochDay), day) }
             .toSortedMap()
             .map { (start, entries) -> start to entries.sortedBy { it.dateEpochDay } }
+    }
+
+    companion object {
+        fun deriveHomeClockUi(todayEntry: DailyEntry?, yesterdayEntry: DailyEntry?): HomeClockUi {
+            val overnightPending = yesterdayEntry != null &&
+                yesterdayEntry.clockInMinutes != null &&
+                yesterdayEntry.clockOutMinutes == null
+            val todayClosed = todayEntry != null &&
+                todayEntry.clockInMinutes != null &&
+                todayEntry.clockOutMinutes != null
+            val todayOpen = todayEntry != null &&
+                todayEntry.clockInMinutes != null &&
+                todayEntry.clockOutMinutes == null
+            val legacyClosed = todayEntry != null &&
+                todayEntry.clockInMinutes == null &&
+                todayEntry.clockOutMinutes == null &&
+                todayEntry.hoursWorked > 0.0
+
+            // Overnight-pending: leave clock-in enabled so tap can show resolve dialog (H2).
+            val clockInEnabled = !todayOpen && !todayClosed && !legacyClosed
+            val clockOutEnabled = todayOpen || overnightPending
+
+            return HomeClockUi(
+                clockInEnabled = clockInEnabled,
+                clockOutEnabled = clockOutEnabled,
+                overnightPending = overnightPending,
+                openOvernightDate = if (overnightPending) {
+                    LocalDate.ofEpochDay(yesterdayEntry!!.dateEpochDay)
+                } else {
+                    null
+                }
+            )
+        }
     }
 }

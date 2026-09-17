@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.VoiceShiftParser
 import com.rmltd.workhourstracker.util.extractClockMinutes
@@ -43,7 +44,8 @@ private sealed class VoiceMode {
 fun EntryScreen(
     date: LocalDate,
     viewModel: WorkHoursViewModel,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    onEditOpenDay: (LocalDate) -> Unit = {}
 ) {
     val context = LocalContext.current
     val entries by viewModel.currentWeekEntries.collectAsState()
@@ -56,12 +58,62 @@ fun EntryScreen(
     var comments by remember(existing) { mutableStateOf(existing?.comments ?: "") }
     var pickerField by remember { mutableStateOf<ClockField?>(null) }
     var voiceMode by remember { mutableStateOf<VoiceMode>(VoiceMode.WholeShift) }
+    var showOvernightConfirm by remember { mutableStateOf(false) }
+    var showBlockedOvernight by remember { mutableStateOf(false) }
+    var openOvernightDate by remember { mutableStateOf<LocalDate?>(null) }
 
     val worked = remember(clockInMinutes, clockOutMinutes, lunchOutMinutes, lunchInMinutes) {
         if (clockInMinutes != null && clockOutMinutes != null && clockInMinutes != clockOutMinutes) {
             HoursCalc.worked(clockInMinutes!!, clockOutMinutes!!, lunchOutMinutes, lunchInMinutes)
         } else {
             null
+        }
+    }
+
+    fun performSave(forceDiscard: Boolean = false) {
+        val start = clockInMinutes ?: return
+        val end = clockOutMinutes ?: return
+        if (forceDiscard) {
+            viewModel.discardOpenAndSaveEntry(
+                date = date,
+                clockInMinutes = start,
+                clockOutMinutes = end,
+                comments = comments,
+                lunchOutMinutes = lunchOutMinutes,
+                lunchInMinutes = lunchInMinutes,
+                onDone = onDone
+            )
+        } else {
+            viewModel.saveEntry(
+                date = date,
+                clockInMinutes = start,
+                clockOutMinutes = end,
+                comments = comments,
+                lunchOutMinutes = lunchOutMinutes,
+                lunchInMinutes = lunchInMinutes
+            ) { result ->
+                when (result) {
+                    is SaveEntryResult.Saved -> onDone()
+                    is SaveEntryResult.BlockedOvernightOpen -> {
+                        openOvernightDate = result.openDate
+                        showBlockedOvernight = true
+                    }
+                }
+            }
+        }
+    }
+
+    fun trySave() {
+        val start = clockInMinutes
+        val end = clockOutMinutes
+        if (start == null || end == null) {
+            Toast.makeText(context, "Set clock in and clock out", Toast.LENGTH_SHORT).show()
+        } else if (start == end) {
+            Toast.makeText(context, "Clock out must be a different time than clock in", Toast.LENGTH_SHORT).show()
+        } else if (HoursCalc.isOvernight(start, end)) {
+            showOvernightConfirm = true
+        } else {
+            performSave()
         }
     }
 
@@ -223,25 +275,7 @@ fun EntryScreen(
             )
 
             Button(
-                onClick = {
-                    val start = clockInMinutes
-                    val end = clockOutMinutes
-                    if (start == null || end == null) {
-                        Toast.makeText(context, "Set clock in and clock out", Toast.LENGTH_SHORT).show()
-                    } else if (start == end) {
-                        Toast.makeText(context, "Clock out must be a different time than clock in", Toast.LENGTH_SHORT).show()
-                    } else {
-                        viewModel.saveEntry(
-                            date = date,
-                            clockInMinutes = start,
-                            clockOutMinutes = end,
-                            comments = comments,
-                            lunchOutMinutes = lunchOutMinutes,
-                            lunchInMinutes = lunchInMinutes
-                        )
-                        onDone()
-                    }
-                },
+                onClick = { trySave() },
                 enabled = clockInMinutes != null && clockOutMinutes != null && clockInMinutes != clockOutMinutes,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -264,6 +298,62 @@ fun EntryScreen(
                 pickerField = null
             },
             onDismiss = { pickerField = null }
+        )
+    }
+
+    if (showOvernightConfirm) {
+        val hoursLabel = worked?.let { HoursCalc.formatHours(it.hours) } ?: "~?"
+        AlertDialog(
+            onDismissRequest = { showOvernightConfirm = false },
+            title = { Text("Overnight shift?") },
+            text = {
+                Text("Clock out is earlier than clock in. Treat as overnight ($hoursLabel)?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showOvernightConfirm = false
+                        performSave()
+                    }
+                ) { Text("Save as overnight") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOvernightConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showBlockedOvernight) {
+        val openDay = openOvernightDate ?: date.minusDays(1)
+        AlertDialog(
+            onDismissRequest = { showBlockedOvernight = false },
+            title = { Text("Open overnight punch") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Another day still has an open clock-in with no clock-out. " +
+                            "Finish that day first, or discard the open punch to save this day."
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = {
+                            showBlockedOvernight = false
+                            onEditOpenDay(openDay)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Edit open day") }
+                    TextButton(
+                        onClick = {
+                            showBlockedOvernight = false
+                            performSave(forceDiscard = true)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Discard open punch & save") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showBlockedOvernight = false }) { Text("Cancel") }
+            }
         )
     }
 }
