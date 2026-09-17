@@ -1,5 +1,6 @@
 package com.rmltd.workhourstracker.ui.screens
 
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,8 +13,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.WeekUtils
@@ -39,6 +43,19 @@ fun SettingsScreen(
         mutableStateOf(
             "%.2f".format(Locale.US, ReminderPreferences.getWeeklyGoalHours(context))
         )
+    }
+    var exactAlarmsAllowed by remember {
+        mutableStateOf(ReminderScheduler.canScheduleExactAlarms(context))
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                exactAlarmsAllowed = ReminderScheduler.canScheduleExactAlarms(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val weekEndDay = WeekUtils.weekEndDayName(weekStartDay)
@@ -181,6 +198,22 @@ fun SettingsScreen(
             ) {
                 val (hour, minute) = reminderTime
                 Text("Reminder time: ${HoursCalc.formatClock(hour * 60 + minute)}")
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !exactAlarmsAllowed) {
+                HorizontalDivider()
+                Text("Exact alarms", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Reminders and week archive are more reliable with exact alarms. " +
+                        "Without them the app falls back to inexact timing.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedButton(
+                    onClick = { ReminderScheduler.openExactAlarmSettings(context) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Allow exact alarms")
+                }
             }
 
             Text(

@@ -57,7 +57,8 @@ fun EntryScreen(
     var lunchInMinutes by remember(existing) { mutableStateOf(existing?.lunchInMinutes) }
     var comments by remember(existing) { mutableStateOf(existing?.comments ?: "") }
     var pickerField by remember { mutableStateOf<ClockField?>(null) }
-    var voiceMode by remember { mutableStateOf<VoiceMode>(VoiceMode.WholeShift) }
+    /** Mode for the in-flight speech request; set at launch, read in the result callback (L3). */
+    var pendingVoiceMode by remember { mutableStateOf<VoiceMode?>(null) }
     var showOvernightConfirm by remember { mutableStateOf(false) }
     var showBlockedOvernight by remember { mutableStateOf(false) }
     var openOvernightDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -119,9 +120,12 @@ fun EntryScreen(
 
     val speechLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (spoken == null) return@rememberLauncherForActivityResult
+        // Capture mode from the request that started recognition, not mid-flight UI flips (L3).
+        val mode = pendingVoiceMode
+        pendingVoiceMode = null
+        if (spoken == null || mode == null) return@rememberLauncherForActivityResult
 
-        when (val mode = voiceMode) {
+        when (mode) {
             is VoiceMode.WholeShift -> {
                 val parsed = VoiceShiftParser.parse(spoken)
                 if (!parsed.hasAny) {
@@ -164,7 +168,14 @@ fun EntryScreen(
                         ClockField.IN -> clockInMinutes = parsed
                         ClockField.LUNCH_OUT -> lunchOutMinutes = parsed
                         ClockField.LUNCH_IN -> lunchInMinutes = parsed
-                        ClockField.OUT -> clockOutMinutes = parsed
+                        ClockField.OUT -> {
+                            val cin = clockInMinutes
+                            clockOutMinutes = if (cin != null) {
+                                VoiceShiftParser.resolveOutAgainstIn(cin, parsed)
+                            } else {
+                                parsed
+                            }
+                        }
                     }
                 } else {
                     Toast.makeText(context, "Didn't catch a time — heard: \"$spoken\"", Toast.LENGTH_LONG).show()
@@ -175,19 +186,22 @@ fun EntryScreen(
 
     val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
-            val prompt = when (voiceMode) {
+            val mode = pendingVoiceMode ?: VoiceMode.WholeShift
+            val prompt = when (mode) {
                 is VoiceMode.WholeShift ->
                     "Describe your shift, like clocked in at 7:30, lunch 12 to 12:30, out at 4"
                 is VoiceMode.Field -> "Say a time, like 7:30 AM"
             }
             startSpeechRecognition(context, speechLauncher, prompt)
         } else {
+            pendingVoiceMode = null
             Toast.makeText(context, "Microphone permission denied — pick the time instead.", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun launchVoice(mode: VoiceMode) {
-        voiceMode = mode
+        // Freeze mode for this request so a second mic tap cannot flip the callback target (L3).
+        pendingVoiceMode = mode
         micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 

@@ -4,7 +4,9 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.receiver.DailyReminderReceiver
 import com.rmltd.workhourstracker.receiver.WeeklyResetReceiver
@@ -45,6 +47,27 @@ object ReminderScheduler {
         val weekStartDay = ReminderPreferences.getWeekStartDay(context)
         val next = WeekUtils.nextWeekStart2AM(from, weekStartDay)
         schedule(context, next, WeeklyResetReceiver::class.java, REQUEST_WEEKLY)
+    }
+
+
+    /** True when exact alarms are allowed (always on API < 31). */
+    fun canScheduleExactAlarms(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return alarmManager.canScheduleExactAlarms()
+    }
+
+    /**
+     * Opens the system screen to grant [Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM]
+     * for this app (API 31+). No-op on older APIs.
+     */
+    fun openExactAlarmSettings(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+            data = Uri.parse("package:${context.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 
     private fun dailyPendingIntent(context: Context): PendingIntent {

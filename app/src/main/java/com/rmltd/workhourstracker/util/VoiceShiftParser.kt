@@ -98,29 +98,63 @@ object VoiceShiftParser {
     }
 
     /**
+     * When am/pm was omitted, prefer a same-day finish after [clockInMinutes]
+     * over inventing an overnight to early AM — unless overnight is the only
+     * sensible reading (e.g. in 10 PM, bare "out at 4" → keep 4 AM).
+     *
+     * Heuristic (documented for L3):
+     *  - Morning clock-in (< noon): bump bare 1–11 times that are ≤ clock-in into PM
+     *    ("in at 8, out at 4" → 4 PM).
+     *  - Afternoon/evening clock-in (≥ noon): if bare 1–11 AM +12h lands after
+     *    clock-in, treat as PM ("in at 3 PM, out at 4" → 4 PM not 4 AM overnight).
+     *    If +12h is still before clock-in (e.g. in 10 PM, out 4 → 4 PM is earlier),
+     *    leave the AM reading so overnight stays correct.
+     */
+    fun resolveOutAgainstIn(clockInMinutes: Int, outMinutes: Int): Int {
+        val hour = outMinutes / 60
+        // Already midnight hour, noon, or PM / 24h — leave alone
+        if (hour == 0 || hour >= 12) return outMinutes
+        val asPm = outMinutes + 12 * 60
+        return when {
+            clockInMinutes < 12 * 60 && outMinutes <= clockInMinutes -> asPm
+            clockInMinutes >= 12 * 60 && asPm > clockInMinutes -> asPm
+            else -> outMinutes
+        }
+    }
+
+    /**
      * If am/pm was omitted, a bare "out at 4" after a morning clock-in would land
      * at 4:00 AM. For day shifts (clock-in before noon), bump times that parsed
-     * at-or-before clock-in into the afternoon.
+     * at-or-before clock-in into the afternoon. For afternoon clock-in, also
+     * prefer PM when that yields a same-day finish (see [resolveOutAgainstIn]).
      */
     private fun disambiguateDayShift(times: ShiftTimes): ShiftTimes {
         val cin = times.clockIn ?: return times
-        if (cin >= 12 * 60) return times
 
-        fun bump(t: Int?): Int? {
+        fun bumpLunch(t: Int?): Int? {
             if (t == null) return null
             val hour = t / 60
-            return if (hour in 1..11 && t <= cin) t + 12 * 60 else t
+            if (hour == 0 || hour >= 12) return t
+            // Morning in: same ≤cin → PM rule for lunch times
+            if (cin < 12 * 60 && t <= cin) return t + 12 * 60
+            // Afternoon in: prefer PM lunch if it still sits after clock-in
+            if (cin >= 12 * 60) {
+                val asPm = t + 12 * 60
+                if (asPm > cin) return asPm
+            }
+            return t
         }
 
-        var lunchOut = bump(times.lunchOut)
-        var lunchIn = bump(times.lunchIn)
+        var lunchOut = bumpLunch(times.lunchOut)
+        var lunchIn = bumpLunch(times.lunchIn)
         // Ensure lunch-in is after lunch-out when both present
         if (lunchOut != null && lunchIn != null && lunchIn <= lunchOut) {
             val hour = lunchIn / 60
             if (hour in 1..11) lunchIn = lunchIn + 12 * 60
         }
+        val clockOut = times.clockOut?.let { resolveOutAgainstIn(cin, it) }
         return times.copy(
-            clockOut = bump(times.clockOut),
+            clockOut = clockOut,
             lunchOut = lunchOut,
             lunchIn = lunchIn
         )

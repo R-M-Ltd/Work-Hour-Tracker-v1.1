@@ -12,8 +12,8 @@ android {
         applicationId = "com.rmltd.workhourstracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.3.3"
+        versionCode = 6
+        versionName = "1.3.4"
     }
 
     buildFeatures {
@@ -53,4 +53,6 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    testImplementation("junit:junit:4.13.2")
 }

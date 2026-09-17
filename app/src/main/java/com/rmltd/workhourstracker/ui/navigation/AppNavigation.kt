@@ -11,6 +11,7 @@ import com.rmltd.workhourstracker.ui.screens.EntryScreen
 import com.rmltd.workhourstracker.ui.screens.HomeScreen
 import com.rmltd.workhourstracker.ui.screens.LogScreen
 import com.rmltd.workhourstracker.ui.screens.SettingsScreen
+import com.rmltd.workhourstracker.util.WeekUtils
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.LocalDate
 
@@ -43,8 +44,8 @@ fun AppNavHost(
             route = Routes.ENTRY,
             arguments = listOf(navArgument(Routes.ENTRY_ARG) { type = NavType.LongType })
         ) { backStackEntry ->
-            val epochDay = backStackEntry.arguments?.getLong(Routes.ENTRY_ARG) ?: LocalDate.now().toEpochDay()
-            val entryDate = LocalDate.ofEpochDay(epochDay)
+            val raw = backStackEntry.arguments?.getLong(Routes.ENTRY_ARG)
+            val entryDate = WeekUtils.dateFromEpochDayOrToday(raw)
             EntryScreen(
                 date = entryDate,
                 viewModel = viewModel,

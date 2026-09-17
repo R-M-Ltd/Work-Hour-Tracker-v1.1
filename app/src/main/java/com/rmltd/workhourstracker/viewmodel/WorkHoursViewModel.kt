@@ -36,7 +36,7 @@ class WorkHoursViewModel(
 
     private fun weekStartDay(): DayOfWeek = ReminderPreferences.getWeekStartDay(appContext)
 
-    /** Re-evaluated on [onAppResume] / [notifyPrefsChanged] so week window tracks calendar + prefs. */
+    /** Re-evaluated on Activity ON_START/resume, DATE_CHANGED broadcasts, and [notifyPrefsChanged]. */
     private val weekStartEpoch = MutableStateFlow(
         WeekUtils.weekStartFor(LocalDate.now(), weekStartDay()).toEpochDay()
     )
@@ -219,7 +219,7 @@ class WorkHoursViewModel(
         }
     }
 
-    /** Call from Activity.onResume so week window and entry query track the calendar. */
+    /** Refresh week boundary + Home today. Called from ON_START/resume and date/TZ broadcasts (L1). */
     fun onAppResume() {
         refreshWeekBoundary()
         homeAnchorDate.value = LocalDate.now()

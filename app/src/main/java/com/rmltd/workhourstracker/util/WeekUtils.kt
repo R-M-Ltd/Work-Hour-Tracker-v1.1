@@ -1,5 +1,6 @@
 package com.rmltd.workhourstracker.util
 
+import java.time.DateTimeException
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -56,4 +57,19 @@ object WeekUtils {
 
     fun weekEndDayName(weekStartDay: DayOfWeek): DayOfWeek =
         DayOfWeek.of(((weekStartDay.value + 5) % 7) + 1)
+
+    /**
+     * Safe epoch-day → [LocalDate]. Extreme / invalid values fall back to today (L5).
+     * [LocalDate.ofEpochDay] throws [DateTimeException] outside supported range.
+     */
+    fun dateFromEpochDayOrToday(epochDay: Long?, today: LocalDate = LocalDate.now()): LocalDate {
+        if (epochDay == null) return today
+        return try {
+            LocalDate.ofEpochDay(epochDay)
+        } catch (_: DateTimeException) {
+            today
+        } catch (_: ArithmeticException) {
+            today
+        }
+    }
 }

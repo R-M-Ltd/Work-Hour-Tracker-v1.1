@@ -4,20 +4,24 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.3 (versionCode 5)
+**Version:** 1.3.4 (versionCode 6)
 
 ## What it does
 - Work week start day is **configurable** in Settings (Sunday–Saturday). **Default remains Wednesday** (Wed → Tue).
 - Tap a day to set **clock in** and **clock out** (picker or spoken time) plus a comment.
 - On the **Entry** screen: **Speak whole shift** fills multiple fields from one utterance
   (e.g. “clocked in at 7:30, lunch 12 to 12:30, out at 4”). Per-field mic buttons remain.
+  Voice mode is captured at launch so mid-flight UI taps cannot flip the result target.
+  Bare afternoon “out at 4” after a PM clock-in prefers 4 PM (same-day) unless overnight
+  is the only sensible reading (e.g. in 10 PM → out 4 AM).
 - On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Buttons enable/disable from day state (Empty / Open / Closed / overnight-pending). **Empty** → clock-in starts an open row (hours 0.0); clock-out fails unless **yesterday is open overnight** (then finishes yesterday, including equal wall times as a 24.00h shift). **Open** → clock-in disabled; clock-out closes today. **Closed** (or legacy hours-only) → clock-in disabled / toast to edit. **Overnight pending** → clock-in opens a dialog: finish overnight, edit yesterday, or discard the open punch and clock in today. Clock ops are single-flight (rapid taps ignored). Clock-in never pairs a new in with a leftover out, and never invents lunch.
 - **Entry** save refuses another day while an open overnight exists (dialog: edit open day / discard & save). Overnight clock-out earlier than clock-in asks for confirmation before save.
 - Optional **lunch start** and **lunch end**. If either is left blank, lunch did not occur and is not subtracted.
 - Hours are calculated from clock times (minus lunch when both lunch fields are set) and rounded to hundredths. Hours cannot be typed.
 - **Weekly goal** (Settings, default **40.00** hours): Home shows a progress ring + remaining hours. Local preference only.
-- The current week's running total recalculates the instant any day is saved.
-- A local notification reminds you once a day to log your hours (default 6:00 PM). Change the time or turn reminders off in **Settings**. The reminder is **skipped** if today already has a clock-out.
+- The current week's running total recalculates the instant any day is saved. Week window and Home “today” refresh on Activity **ON_START** / resume and on `DATE_CHANGED` / timezone / time change broadcasts (no process kill needed after midnight).
+- A local notification reminds you once a day to log your hours (default 6:00 PM). Change the time or turn reminders off in **Settings**. The reminder is **skipped** if today already has a clock-out (intentional; open overnight on yesterday does not suppress today’s reminder).
+- On Android 12+, if exact alarms are denied, Settings offers **Allow exact alarms** (opens the system exact-alarm permission screen). Reminders/week archive fall back to inexact timing until granted.
 - At **2:00 AM on the configured week-start day**, the just-finished week is archived into a history
   log (skipped when the week total is 0.0) and the Home screen automatically starts showing the new week.
 - A History screen lists archived weeks with hours (empty 0.0 weeks are hidden), expandable to per-day detail, shows your all-time total as the **sum of all logged days (including this week)**, and can **export CSV** (share sheet) of daily rows grouped by the **configured** week-start preference.
@@ -29,22 +33,26 @@ Everything runs and stores data on-device.
    WorkManager (all standard, no extra accounts or keys needed).
 4. Run on an emulator or device with **API 26 (Android 8.0)** or higher.
 
-Launcher uses a vector `@drawable/ic_launcher` (no mipmap adaptive icons yet).
-Android Studio's "Image Asset" tool can generate adaptive mipmaps if desired.
+Launcher icon is `@drawable/ic_launcher` (vector).
+
+## Unit tests
+Pure Kotlin tests under `app/src/test/java/.../util/` cover `HoursCalc`, `WeekUtils`
+(including safe epoch-day nav fallback), and `VoiceShiftParser` (AM/PM heuristics).
+Run from Android Studio or `./gradlew test` when an SDK is configured.
 
 ## Project layout
 ```
 app/src/main/java/com/rmltd/workhourstracker/
-├── MainActivity.kt              # Entry point, requests notification permission
+├── MainActivity.kt              # Entry point; week refresh on start/resume + date broadcasts
 ├── WorkHoursApplication.kt      # Holds the repository singleton, arms alarms on launch
 ├── data/
 │   ├── DailyEntry.kt            # Room entity: one row per day
-│   ├── WeekLog.kt               # Room entity: one row per archived week
+│   ├── WeekLog.kt               # Room entity: archived week summaries (History list)
 │   ├── WorkHoursDao.kt          # Queries
 │   ├── WorkHoursDatabase.kt     # Room database singleton
 │   ├── WorkHoursRepository.kt   # Week-boundary-aware data access
 │   └── ReminderPreferences.kt   # Reminder, week-start day, weekly goal
-├── util/WeekUtils.kt            # Configurable week-start date math
+├── util/WeekUtils.kt            # Configurable week-start date math + safe epochDay
 ├── util/HoursCalc.kt            # Clock-in/out → hours to hundredths
 ├── util/VoiceShiftParser.kt     # Whole-shift + single-time speech parsing
 ├── util/CsvExporter.kt          # CSV build + FileProvider share intent
@@ -70,7 +78,8 @@ app/src/main/java/com/rmltd/workhourstracker/
   Before launching, the app checks `resolveActivity` (and catches
   `ActivityNotFoundException`) and toasts if no recognizer is installed; the
   manifest declares `<queries>` for `RECOGNIZE_SPEECH` and marks the microphone
-  as optional.
+  as optional. The voice mode/target for a request is frozen at launch so rapid
+  dual mic taps cannot apply the result to the wrong field.
 - **Data is never deleted.** Rather than wiping the previous week's rows at
   reset time, the Home screen always queries for whatever the *current*
   week window is (from the configured start day). This means the weekly "reset"
@@ -97,6 +106,8 @@ app/src/main/java/com/rmltd/workhourstracker/
   reset, since periodic `WorkManager` jobs don't guarantee firing at a precise
   clock time — only "around" an interval. Each alarm re-schedules its own next
   occurrence when it fires, and `BootReceiver` re-arms both after a restart.
+  When exact alarms are denied (API 31+), scheduling falls back to inexact and
+  Settings can deep-link to `ACTION_REQUEST_SCHEDULE_EXACT_ALARM`.
 - **Minimum SDK 26** (Android 8.0) to support notification channels cleanly;
   this covers the vast majority of active Android devices.
 
@@ -105,3 +116,5 @@ app/src/main/java/com/rmltd/workhourstracker/
   integration" requirement. A sync layer could be added later behind the same
   `WorkHoursRepository` interface without touching the UI.
 - Theme follows the system (no in-app theme picker).
+- Daily reminder does not skip solely because yesterday has an open overnight
+  punch (product choice; still notifies if today is open with no out).
