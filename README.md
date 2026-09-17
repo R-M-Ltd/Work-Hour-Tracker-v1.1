@@ -6,6 +6,8 @@ Everything runs and stores data on-device.
 **Application id / package:** `com.rmltd.workhourstracker`  
 **Version:** 1.3.7 (versionCode 9)
 
+See [CHANGELOG.md](CHANGELOG.md) for shipped 1.3.x notes.
+
 ## What it does
 - Work week start day is **configurable** in Settings (Sunday–Saturday). **Default remains Wednesday** (Wed → Tue).
 - Tap a day to set **clock in** and **clock out** (picker or spoken time) plus a comment.
