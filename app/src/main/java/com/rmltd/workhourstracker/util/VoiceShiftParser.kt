@@ -174,10 +174,15 @@ object VoiceShiftParser {
         val s = spoken.lowercase(Locale.getDefault())
         val results = mutableListOf<Pair<Int, Int>>() // startIndex to minutes
 
+        // Prefer explicit forms first. Do NOT treat "8 12" as 8:12 — that breaks
+        // unlabeled sequences like "8 12 12:30 4". Space-separated HH MM is only
+        // accepted when am/pm is present ("7 30 pm"). Bare hours are collected last.
         val patterns = listOf(
-            Regex("""\b(\d{1,2})[:\s](\d{2})\s*([ap]\.?m\.?)?\b"""),
+            Regex("""\b(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)?\b"""),
+            Regex("""\b(\d{1,2})\s+(\d{2})\s*([ap]\.?m\.?)\b"""),
             Regex("""\b(\d{1,2})(\d{2})\s*([ap]\.?m\.?)?\b"""),
-            Regex("""\b(\d{1,2})\s*([ap]\.?m\.?)\b""")
+            Regex("""\b(\d{1,2})\s*([ap]\.?m\.?)\b"""),
+            Regex("""\b(\d{1,2})\b""")
         )
         for (pattern in patterns) {
             for (m in pattern.findAll(s)) {
