@@ -168,4 +168,45 @@ class CsvExporterTest {
         assertFalse(csv.contains('"'))
         assertTrue(csv.trimEnd().endsWith(','))
     }
+
+    @Test
+    fun midnightAndNoon_clockFormats() {
+        val day = LocalDate.of(2026, 9, 17)
+        val csv = CsvExporter.buildCsv(
+            listOf(
+                weekStart to listOf(
+                    entry(day, clockIn = 0, clockOut = 12 * 60, hours = 12.0)
+                )
+            )
+        )
+        assertEquals(
+            "$header\n" +
+                "2026-09-16,2026-09-17,12:00 AM,12:00 PM,,,12.00,\n",
+            csv
+        )
+    }
+
+    @Test
+    fun emptyEntriesForWeek_headerOnlyExtraWeekSilent() {
+        val csv = CsvExporter.buildCsv(listOf(weekStart to emptyList()))
+        assertEquals("$header\n", csv)
+    }
+
+    @Test
+    fun allClocksNull_blankClockColumns() {
+        val day = LocalDate.of(2026, 9, 17)
+        val csv = CsvExporter.buildCsv(
+            listOf(
+                weekStart to listOf(
+                    entry(day, clockIn = null, clockOut = null, hours = 0.0)
+                )
+            )
+        )
+        assertEquals(
+            "$header\n" +
+                "2026-09-16,2026-09-17,,,,,0.00,\n",
+            csv
+        )
+    }
+
 }

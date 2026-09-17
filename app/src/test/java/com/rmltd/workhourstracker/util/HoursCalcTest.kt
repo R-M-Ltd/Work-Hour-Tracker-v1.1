@@ -2,8 +2,10 @@ package com.rmltd.workhourstracker.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 class HoursCalcTest {
 
@@ -147,6 +149,87 @@ class HoursCalcTest {
     @Test(expected = IllegalArgumentException::class)
     fun rejectsIsOvernightOutOfRange() {
         HoursCalc.isOvernight(0, HoursCalc.MINUTES_PER_DAY)
+    }
+
+
+    @Test
+    fun lunchInBeforeOrEqualOut_ignored() {
+        // Same lunch out/in → not usable
+        val same = HoursCalc.worked(9 * 60, 17 * 60, 12 * 60, 12 * 60)
+        assertEquals(8.00, same.hours, 0.001)
+        assertFalse(same.lunchApplied)
+        // lunch-in before lunch-out on timeline
+        val inverted = HoursCalc.worked(9 * 60, 17 * 60, 13 * 60, 12 * 60)
+        assertEquals(8.00, inverted.hours, 0.001)
+        assertFalse(inverted.lunchApplied)
+    }
+
+    @Test
+    fun lunchTouchingShiftBoundaries_ignored() {
+        // lunchOut == clockIn → lunchOut <= clockIn
+        val atIn = HoursCalc.worked(9 * 60, 17 * 60, 9 * 60, 9 * 60 + 30)
+        assertEquals(8.00, atIn.hours, 0.001)
+        assertFalse(atIn.lunchApplied)
+        // lunchIn == clockOut → lunchIn >= outOnTimeline
+        val atOut = HoursCalc.worked(9 * 60, 17 * 60, 16 * 60 + 30, 17 * 60)
+        assertEquals(8.00, atOut.hours, 0.001)
+        assertFalse(atOut.lunchApplied)
+    }
+
+    @Test
+    fun partialLunch_onlyIn_ignored() {
+        val w = HoursCalc.worked(9 * 60, 17 * 60, null, 12 * 60 + 30)
+        assertEquals(8.00, w.hours, 0.001)
+        assertFalse(w.lunchApplied)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsLunchMinutesOutOfRange() {
+        HoursCalc.worked(9 * 60, 17 * 60, -1, 12 * 60)
+    }
+
+    @Test
+    fun overnight_lunchBeforeClockInWall_stillOnTimeline() {
+        // 22:00–06:00; lunch 23:00–23:30 (same calendar evening) = 7.50h
+        val w = HoursCalc.worked(22 * 60, 6 * 60, 23 * 60, 23 * 60 + 30)
+        assertEquals(7.50, w.hours, 0.001)
+        assertTrue(w.lunchApplied)
+        assertTrue(w.overnight)
+    }
+
+    @Test
+    fun formatRange_nullWhenEitherMissing() {
+        assertNull(HoursCalc.formatRange(null, 17 * 60))
+        assertNull(HoursCalc.formatRange(9 * 60, null))
+        assertNull(HoursCalc.formatRange(null, null))
+    }
+
+    @Test
+    fun formatClock_range_andDayLabel_usLocale() {
+        val prev = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.US)
+            assertEquals("9:00 AM", HoursCalc.formatClock(9 * 60))
+            assertEquals("12:00 AM", HoursCalc.formatClock(0))
+            assertEquals("12:30 PM", HoursCalc.formatClock(12 * 60 + 30))
+            assertEquals("9:00 AM – 5:00 PM", HoursCalc.formatRange(9 * 60, 17 * 60))
+            assertEquals(
+                "9:00 AM – 5:00 PM",
+                HoursCalc.formatDayLabel(9 * 60, 17 * 60, null, null)
+            )
+            assertEquals(
+                "9:00 AM – 5:00 PM  ·  Lunch 12:00 PM – 12:30 PM",
+                HoursCalc.formatDayLabel(9 * 60, 17 * 60, 12 * 60, 12 * 60 + 30)
+            )
+            assertNull(HoursCalc.formatDayLabel(null, 17 * 60, 12 * 60, 12 * 60 + 30))
+            // Partial lunch → range only (no lunch segment)
+            assertEquals(
+                "9:00 AM – 5:00 PM",
+                HoursCalc.formatDayLabel(9 * 60, 17 * 60, 12 * 60, null)
+            )
+        } finally {
+            Locale.setDefault(prev)
+        }
     }
 
 }

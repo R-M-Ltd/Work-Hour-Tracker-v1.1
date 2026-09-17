@@ -125,4 +125,93 @@ class VoiceShiftParserTest {
         assertEquals(9 * 60, t.clockIn)
         assertEquals(17 * 60, t.clockOut)
     }
+
+    @Test
+    fun breakUntil_synonymLunchRange() {
+        val t = VoiceShiftParser.parse("in at 8, break from 12 until 12:30, out at 5")
+        assertEquals(8 * 60, t.clockIn)
+        assertEquals(12 * 60, t.lunchOut)
+        assertEquals(12 * 60 + 30, t.lunchIn)
+        assertEquals(17 * 60, t.clockOut)
+    }
+
+    @Test
+    fun brokeThrough_synonym() {
+        val t = VoiceShiftParser.parse("started at 9, broke 12 through 12:45, ended at 5")
+        assertEquals(9 * 60, t.clockIn)
+        assertEquals(12 * 60, t.lunchOut)
+        assertEquals(12 * 60 + 45, t.lunchIn)
+        assertEquals(17 * 60, t.clockOut)
+    }
+
+    @Test
+    fun unlabeledTwoTimes_inAndOut() {
+        val t = VoiceShiftParser.parse("8 5")
+        assertEquals(8 * 60, t.clockIn)
+        assertEquals(17 * 60, t.clockOut) // bare 5 after morning in → 5 PM
+        assertNull(t.lunchOut)
+    }
+
+    @Test
+    fun unlabeledThreeTimes_middleAsLunchOut() {
+        val t = VoiceShiftParser.parse("8 12 5")
+        assertEquals(8 * 60, t.clockIn)
+        assertEquals(12 * 60, t.lunchOut)
+        assertNull(t.lunchIn)
+        assertEquals(17 * 60, t.clockOut)
+    }
+
+    @Test
+    fun unlabeledSingleTime_clockInOnly() {
+        val t = VoiceShiftParser.parse("9")
+        assertEquals(9 * 60, t.clockIn)
+        assertNull(t.clockOut)
+        assertEquals(1, t.filledCount)
+    }
+
+    @Test
+    fun resolveOutAgainstIn_leavesPmAndMidnightAlone() {
+        assertEquals(16 * 60, VoiceShiftParser.resolveOutAgainstIn(8 * 60, 16 * 60))
+        assertEquals(0, VoiceShiftParser.resolveOutAgainstIn(22 * 60, 0))
+        assertEquals(12 * 60, VoiceShiftParser.resolveOutAgainstIn(8 * 60, 12 * 60))
+    }
+
+    @Test
+    fun afternoonIn_bareLunchBumpedToPm() {
+        val t = VoiceShiftParser.parse("clocked in at 3 pm, lunch 4 to 4:30, out at 8")
+        assertEquals(15 * 60, t.clockIn)
+        assertEquals(16 * 60, t.lunchOut)
+        assertEquals(16 * 60 + 30, t.lunchIn)
+        assertEquals(20 * 60, t.clockOut)
+    }
+
+    @Test
+    fun extractClockMinutes_spaceSeparatedWithAmPm() {
+        assertEquals(19 * 60 + 30, extractClockMinutes("7 30 pm"))
+        assertEquals(7 * 60 + 30, extractClockMinutes("7 30 am"))
+    }
+
+    @Test
+    fun extractClockMinutes_invalidMinute_null() {
+        assertNull(extractClockMinutes("7:60 am"))
+        assertNull(extractClockMinutes("25:00"))
+    }
+
+    @Test
+    fun extractAllTimes_prefersColonOverBarePair() {
+        // "8 12" must stay two bare hours, not 8:12
+        assertEquals(listOf(8 * 60, 12 * 60), VoiceShiftParser.extractAllTimes("8 12"))
+        assertEquals(
+            listOf(8 * 60, 12 * 60, 12 * 60 + 30, 4 * 60),
+            VoiceShiftParser.extractAllTimes("8 12 12:30 4")
+        )
+    }
+
+    @Test
+    fun hyphenNormalized_inOut() {
+        val t = VoiceShiftParser.parse("clocked-in at 8 - out at 4")
+        assertEquals(8 * 60, t.clockIn)
+        assertEquals(16 * 60, t.clockOut)
+    }
+
 }

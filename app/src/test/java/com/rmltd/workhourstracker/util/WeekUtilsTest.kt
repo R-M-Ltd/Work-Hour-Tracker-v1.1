@@ -6,6 +6,7 @@ import org.junit.Test
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 class WeekUtilsTest {
 
@@ -134,4 +135,43 @@ class WeekUtilsTest {
             assertTrue(end != start)
         }
     }
+
+    @Test
+    fun nextWeekStart2AM_afterTwoAmOnStartDay_rollsForward() {
+        val from = LocalDateTime.of(2026, 9, 16, 2, 1) // Wed just after 2 AM
+        val next = WeekUtils.nextWeekStart2AM(from, DayOfWeek.WEDNESDAY)
+        assertEquals(LocalDateTime.of(2026, 9, 23, 2, 0), next)
+    }
+
+    @Test
+    fun nextWeekStart2AM_midWeek_nextOccurrence() {
+        // Thu → next Wed 2 AM
+        val from = LocalDateTime.of(2026, 9, 17, 15, 0)
+        val next = WeekUtils.nextWeekStart2AM(from, DayOfWeek.WEDNESDAY)
+        assertEquals(LocalDateTime.of(2026, 9, 23, 2, 0), next)
+    }
+
+    @Test
+    fun nextWeekStart2AM_sundayConfigured_beforeAndAfter() {
+        // Sun 2026-09-13 01:00 → same day 2 AM; 03:00 → next Sunday
+        val before = LocalDateTime.of(2026, 9, 13, 1, 0)
+        assertEquals(
+            LocalDateTime.of(2026, 9, 13, 2, 0),
+            WeekUtils.nextWeekStart2AM(before, DayOfWeek.SUNDAY)
+        )
+        val after = LocalDateTime.of(2026, 9, 13, 3, 0)
+        assertEquals(
+            LocalDateTime.of(2026, 9, 20, 2, 0),
+            WeekUtils.nextWeekStart2AM(after, DayOfWeek.SUNDAY)
+        )
+    }
+
+    @Test
+    fun epochMillis_fixedZone() {
+        val dt = LocalDateTime.of(2026, 9, 16, 2, 0)
+        val zone = ZoneId.of("America/Chicago")
+        val expected = dt.atZone(zone).toInstant().toEpochMilli()
+        assertEquals(expected, WeekUtils.epochMillis(dt, zone))
+    }
+
 }

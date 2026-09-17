@@ -297,4 +297,64 @@ class ClockDayStateTest {
             WorkHoursRepository.deriveHomeClockUi(todayE, null)
         )
     }
+
+    @Test
+    fun classify_outWithoutIn_zeroHours_empty() {
+        // Orphan out alone does not open or close the day
+        assertEquals(ClockDayState.Kind.EMPTY, ClockDayState.classify(null, fivePm, 0.0))
+    }
+
+    @Test
+    fun classify_outWithoutIn_withHours_legacyClosed() {
+        assertEquals(
+            ClockDayState.Kind.LEGACY_CLOSED,
+            ClockDayState.classify(null, fivePm, 8.0)
+        )
+    }
+
+    @Test
+    fun classify_closedWinsOverPositiveHours() {
+        assertEquals(
+            ClockDayState.Kind.CLOSED,
+            ClockDayState.classify(nineAm, fivePm, 8.0)
+        )
+    }
+
+    @Test
+    fun ui_overnightWithClosedToday_disablesIn_enablesOut() {
+        val ui = ClockDayState.deriveHomeClockUi(
+            entry(today, clockIn = nineAm, clockOut = fivePm, hours = 8.0),
+            entry(yesterday, clockIn = tenPm)
+        )
+        assertFalse(ui.clockInEnabled)
+        assertTrue(ui.clockOutEnabled)
+        assertTrue(ui.overnightPending)
+        assertEquals(yesterday, ui.openOvernightDate)
+    }
+
+    @Test
+    fun ui_overnightPending_nullEpochDay_noOpenDate() {
+        val ui = ClockDayState.deriveHomeClockUi(
+            todayIn = null,
+            todayOut = null,
+            todayHoursWorked = 0.0,
+            yesterdayIn = tenPm,
+            yesterdayOut = null,
+            yesterdayEpochDay = null
+        )
+        assertTrue(ui.overnightPending)
+        assertNull(ui.openOvernightDate)
+        assertTrue(ui.clockInEnabled)
+        assertTrue(ui.clockOutEnabled)
+    }
+
+    @Test
+    fun clockIn_legacyWithOvernight_alreadyClosedWins() {
+        // Legacy closed today still wins over yesterday overnight
+        assertEquals(
+            ClockInResult.ALREADY_CLOSED,
+            ClockDayState.decideClockIn(null, null, 8.0, tenPm, null)
+        )
+    }
+
 }
