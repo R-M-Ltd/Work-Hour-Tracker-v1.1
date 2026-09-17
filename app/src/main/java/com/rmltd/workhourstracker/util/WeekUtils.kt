@@ -48,10 +48,6 @@ object WeekUtils {
         return candidate
     }
 
-    /** @deprecated Prefer [nextWeekStart2AM]; kept for call-site clarity during migration. */
-    fun nextWednesday2AM(from: LocalDateTime = LocalDateTime.now()): LocalDateTime =
-        nextWeekStart2AM(from, DayOfWeek.WEDNESDAY)
-
     fun epochMillis(dateTime: LocalDateTime, zone: ZoneId = ZoneId.systemDefault()): Long =
         dateTime.atZone(zone).toInstant().toEpochMilli()
 

@@ -4,7 +4,7 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.4 (versionCode 6)
+**Version:** 1.3.5 (versionCode 7)
 
 ## What it does
 - Work week start day is **configurable** in Settings (Sunday–Saturday). **Default remains Wednesday** (Wed → Tue).
@@ -36,8 +36,16 @@ Everything runs and stores data on-device.
 Launcher icon is `@drawable/ic_launcher` (vector).
 
 ## Unit tests
-Pure Kotlin tests under `app/src/test/java/.../util/` cover `HoursCalc`, `WeekUtils`
-(including safe epoch-day nav fallback), and `VoiceShiftParser` (AM/PM heuristics).
+Pure Kotlin / JUnit tests under `app/src/test/java/.../` cover:
+- `HoursCalc` — day/overnight, lunch, `equalOutMeansFullDay` → 24.00h, rounding
+- `WeekUtils` — week-start for all seven start days, 2 AM next-week, epoch-day fallback
+- `VoiceShiftParser` — labeled phrases, bare AM/PM heuristics, unlabeled times
+- `WorkHoursRepository.deriveHomeClockUi` — Empty / Open / Closed / overnight-pending / legacy
+
+**Still needs instrumented (or in-memory Room) tests:** `clockInNow` / `clockOutNow` /
+`saveEntry` / discard paths (DAO + mutex + upsert). The UI derive helper is covered above;
+the write transitions are not.
+
 Run from Android Studio or `./gradlew test` when an SDK is configured.
 
 ## Project layout

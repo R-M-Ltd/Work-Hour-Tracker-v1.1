@@ -75,9 +75,12 @@ object HoursCalc {
         clockInMinutes: Int,
         clockOutMinutes: Int,
         equalOutMeansFullDay: Boolean = false
-    ): Boolean =
-        clockOutMinutes < clockInMinutes ||
+    ): Boolean {
+        requireValid(clockInMinutes)
+        requireValid(clockOutMinutes)
+        return clockOutMinutes < clockInMinutes ||
             (equalOutMeansFullDay && clockOutMinutes == clockInMinutes)
+    }
 
     fun formatClock(minutesFromMidnight: Int): String {
         val time = LocalTime.of(minutesFromMidnight / 60, minutesFromMidnight % 60)
