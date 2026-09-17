@@ -4,7 +4,7 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.6 (versionCode 8)
+**Version:** 1.3.7 (versionCode 9)
 
 ## What it does
 - Work week start day is **configurable** in Settings (Sunday–Saturday). **Default remains Wednesday** (Wed → Tue).
@@ -40,15 +40,18 @@ Pure Kotlin / JUnit tests under `app/src/test/java/.../` cover:
 - `HoursCalc` — day/overnight, lunch, `equalOutMeansFullDay` → 24.00h, rounding
 - `WeekUtils` — week-start for all seven start days, 2 AM next-week, epoch-day fallback
 - `VoiceShiftParser` — labeled phrases, bare AM/PM heuristics, unlabeled times
-- `WorkHoursRepository.deriveHomeClockUi` — Empty / Open / Closed / overnight-pending / legacy
+- `ClockDayState` — day Kind (Empty / Open / Closed / legacy), overnight flag,
+  `decideClockIn` / `decideClockOut` result matrix, `deriveHomeClockUi` (incl.
+  Repository delegate)
 - `CsvExporter.buildCsv` — header, row formatting, Locale.US clocks, comment escaping
   (commas / quotes / newlines); no `Context` required
 
 **Room clock-state write paths still need a device / emulator / local SDK.**
 `clockInNow` / `clockOutNow` / `saveEntry` / discard / overnight upserts go through
-Room DAO + mutex and are **not** covered by the JVM unit suite. Add instrumented
-tests under `app/src/androidTest/` (or an in-memory Room harness) and run them with
-a local Android SDK via Android Studio or `./gradlew connectedAndroidTest`
+Room DAO + mutex and are **not** covered by the JVM unit suite (only the pure
+decision helpers in `ClockDayState` are). Add instrumented tests under
+`app/src/androidTest/` (or an in-memory Room harness) and run them with a local
+Android SDK via Android Studio or `./gradlew connectedAndroidTest`
 (this repo ships without a Gradle wrapper or SDK — configure both on your machine).
 
 Run pure unit tests from Android Studio or `./gradlew test` once an SDK + wrapper
@@ -65,6 +68,7 @@ app/src/main/java/com/rmltd/workhourstracker/
 │   ├── WorkHoursDao.kt          # Queries
 │   ├── WorkHoursDatabase.kt     # Room database singleton
 │   ├── WorkHoursRepository.kt   # Week-boundary-aware data access
+│   ├── ClockDayState.kt         # Pure clock day-state / transition decisions
 │   └── ReminderPreferences.kt   # Reminder, week-start day, weekly goal
 ├── util/WeekUtils.kt            # Configurable week-start date math + safe epochDay
 ├── util/HoursCalc.kt            # Clock-in/out → hours to hundredths

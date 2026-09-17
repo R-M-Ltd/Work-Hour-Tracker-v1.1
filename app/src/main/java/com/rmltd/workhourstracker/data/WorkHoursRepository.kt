@@ -216,25 +216,15 @@ class WorkHoursRepository(
 
     private suspend fun clockInNowUnlocked(date: LocalDate, minutes: Int): ClockInResult {
         val existing = dao.entryForDateOnce(date.toEpochDay())
-        val todayIn = existing?.clockInMinutes
-        val todayOut = existing?.clockOutMinutes
-
-        if (todayIn != null && todayOut != null) {
-            return ClockInResult.ALREADY_CLOSED
-        }
-        if (todayIn != null) {
-            return ClockInResult.ALREADY_OPEN
-        }
-        // Legacy hours-only row (migrated): treat as closed — do not wipe.
-        if (existing != null && existing.hoursWorked > 0.0) {
-            return ClockInResult.ALREADY_CLOSED
-        }
-
-        // Empty today: block if yesterday still has an open overnight shift.
         val prior = dao.entryForDateOnce(date.minusDays(1).toEpochDay())
-        if (prior != null && prior.clockInMinutes != null && prior.clockOutMinutes == null) {
-            return ClockInResult.BLOCKED_OVERNIGHT
-        }
+        val decision = ClockDayState.decideClockIn(
+            todayIn = existing?.clockInMinutes,
+            todayOut = existing?.clockOutMinutes,
+            todayHoursWorked = existing?.hoursWorked ?: 0.0,
+            yesterdayIn = prior?.clockInMinutes,
+            yesterdayOut = prior?.clockOutMinutes
+        )
+        if (decision != ClockInResult.STARTED) return decision
 
         val weekStart = WeekUtils.weekStartFor(date, startDay())
         dao.upsertEntry(
@@ -263,44 +253,46 @@ class WorkHoursRepository(
         minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
     ): ClockOutResult = clockMutex.withLock {
         val today = dao.entryForDateOnce(date.toEpochDay())
-        val todayIn = today?.clockInMinutes
-        val todayOut = today?.clockOutMinutes
-
-        if (todayIn != null && todayOut != null) {
-            return@withLock ClockOutResult.ALREADY_CLOSED
-        }
-
-        if (today != null && todayIn != null) {
-            // Same calendar day: still reject identical wall times (0h).
-            if (todayIn == minutes) return@withLock ClockOutResult.FAILED
-            upsertClosedEntry(
-                date = date,
-                clockInMinutes = todayIn,
-                clockOutMinutes = minutes,
-                comments = today.comments,
-                lunchOutMinutes = today.lunchOutMinutes,
-                lunchInMinutes = today.lunchInMinutes
-            )
-            return@withLock ClockOutResult.SUCCESS
-        }
-
         val yesterday = date.minusDays(1)
         val prior = dao.entryForDateOnce(yesterday.toEpochDay())
+        val todayIn = today?.clockInMinutes
+        val todayOut = today?.clockOutMinutes
         val priorIn = prior?.clockInMinutes
-        if (prior != null && priorIn != null && prior.clockOutMinutes == null) {
-            // Equal wall times OK for overnight → 24.00h via HoursCalc.
-            upsertClosedEntry(
-                date = yesterday,
-                clockInMinutes = priorIn,
-                clockOutMinutes = minutes,
-                comments = prior.comments,
-                lunchOutMinutes = prior.lunchOutMinutes,
-                lunchInMinutes = prior.lunchInMinutes,
-                equalOutMeansFullDay = priorIn == minutes
-            )
-            return@withLock ClockOutResult.SUCCESS_OVERNIGHT
+
+        val decision = ClockDayState.decideClockOut(
+            todayIn = todayIn,
+            todayOut = todayOut,
+            yesterdayIn = priorIn,
+            yesterdayOut = prior?.clockOutMinutes,
+            outMinutes = minutes
+        )
+        when (decision) {
+            ClockOutResult.ALREADY_CLOSED, ClockOutResult.FAILED -> return@withLock decision
+            ClockOutResult.SUCCESS -> {
+                // todayIn non-null by decideClockOut contract
+                upsertClosedEntry(
+                    date = date,
+                    clockInMinutes = todayIn!!,
+                    clockOutMinutes = minutes,
+                    comments = today!!.comments,
+                    lunchOutMinutes = today.lunchOutMinutes,
+                    lunchInMinutes = today.lunchInMinutes
+                )
+            }
+            ClockOutResult.SUCCESS_OVERNIGHT -> {
+                // priorIn non-null by decideClockOut contract; equal wall → 24.00h
+                upsertClosedEntry(
+                    date = yesterday,
+                    clockInMinutes = priorIn!!,
+                    clockOutMinutes = minutes,
+                    comments = prior!!.comments,
+                    lunchOutMinutes = prior.lunchOutMinutes,
+                    lunchInMinutes = prior.lunchInMinutes,
+                    equalOutMeansFullDay = priorIn == minutes
+                )
+            }
         }
-        return@withLock ClockOutResult.FAILED
+        decision
     }
 
     /** Week logs with meaningful hours only (empty 0.0 archives are hidden). */
@@ -404,35 +396,8 @@ class WorkHoursRepository(
     }
 
     companion object {
-        fun deriveHomeClockUi(todayEntry: DailyEntry?, yesterdayEntry: DailyEntry?): HomeClockUi {
-            val overnightPending = yesterdayEntry != null &&
-                yesterdayEntry.clockInMinutes != null &&
-                yesterdayEntry.clockOutMinutes == null
-            val todayClosed = todayEntry != null &&
-                todayEntry.clockInMinutes != null &&
-                todayEntry.clockOutMinutes != null
-            val todayOpen = todayEntry != null &&
-                todayEntry.clockInMinutes != null &&
-                todayEntry.clockOutMinutes == null
-            val legacyClosed = todayEntry != null &&
-                todayEntry.clockInMinutes == null &&
-                todayEntry.clockOutMinutes == null &&
-                todayEntry.hoursWorked > 0.0
-
-            // Overnight-pending: leave clock-in enabled so tap can show resolve dialog (H2).
-            val clockInEnabled = !todayOpen && !todayClosed && !legacyClosed
-            val clockOutEnabled = todayOpen || overnightPending
-
-            return HomeClockUi(
-                clockInEnabled = clockInEnabled,
-                clockOutEnabled = clockOutEnabled,
-                overnightPending = overnightPending,
-                openOvernightDate = if (overnightPending) {
-                    LocalDate.ofEpochDay(yesterdayEntry!!.dateEpochDay)
-                } else {
-                    null
-                }
-            )
-        }
+        /** Delegates to [ClockDayState.deriveHomeClockUi] (kept for call-site stability). */
+        fun deriveHomeClockUi(todayEntry: DailyEntry?, yesterdayEntry: DailyEntry?): HomeClockUi =
+            ClockDayState.deriveHomeClockUi(todayEntry, yesterdayEntry)
     }
 }
