@@ -3,6 +3,12 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.9] — versionCode 11
+
+- Home: Material TimePicker rows for today's clock-in and clock-out, with **Save today's times** (keeps existing Clock in/out now).
+- Manual save reuses Entry/Repository `saveEntry` (preserve lunch when present; overnight confirm + BlockedOvernightOpen dialogs).
+- Pure `HomeManualTimes` helpers + JVM unit tests.
+
 ## [1.3.8] — versionCode 10
 
 - Expand JVM unit coverage for pure logic edges: HoursCalc lunch boundaries / format helpers, WeekUtils `nextWeekStart2AM` / `epochMillis`, VoiceShiftParser synonyms and unlabeled sequences, CsvExporter midnight/noon/blank clocks, ClockDayState orphan-out and overnight+closed UI cells.

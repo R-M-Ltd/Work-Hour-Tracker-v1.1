@@ -4,7 +4,7 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.7 (versionCode 9)
+**Version:** 1.3.9 (versionCode 11)
 
 See [CHANGELOG.md](CHANGELOG.md) for shipped 1.3.x notes.
 
@@ -16,7 +16,7 @@ See [CHANGELOG.md](CHANGELOG.md) for shipped 1.3.x notes.
   Voice mode is captured at launch so mid-flight UI taps cannot flip the result target.
   Bare afternoon “out at 4” after a PM clock-in prefers 4 PM (same-day) unless overnight
   is the only sensible reading (e.g. in 10 PM → out 4 AM).
-- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Buttons enable/disable from day state (Empty / Open / Closed / overnight-pending). **Empty** → clock-in starts an open row (hours 0.0); clock-out fails unless **yesterday is open overnight** (then finishes yesterday, including equal wall times as a 24.00h shift). **Open** → clock-in disabled; clock-out closes today. **Closed** (or legacy hours-only) → clock-in disabled / toast to edit. **Overnight pending** → clock-in opens a dialog: finish overnight, edit yesterday, or discard the open punch and clock in today. Clock ops are single-flight (rapid taps ignored). Clock-in never pairs a new in with a leftover out, and never invents lunch.
+- On **Home**, for **today** only: **Clock in now** / **Clock out now** set the time to the current local clock (minutes since midnight). Buttons enable/disable from day state (Empty / Open / Closed / overnight-pending). **Empty** → clock-in starts an open row (hours 0.0); clock-out fails unless **yesterday is open overnight** (then finishes yesterday, including equal wall times as a 24.00h shift). **Open** → clock-in disabled; clock-out closes today. **Closed** (or legacy hours-only) → clock-in disabled / toast to edit. **Overnight pending** → clock-in opens a dialog: finish overnight, edit yesterday, or discard the open punch and clock in today. Clock ops are single-flight (rapid taps ignored). Clock-in never pairs a new in with a leftover out, and never invents lunch. You can also **pick clock-in / clock-out** with Material TimePickers and **Save today's times** (same `saveEntry` path as Entry, including overnight confirm and open-overnight block dialogs; existing lunch is preserved — edit the day to change lunch).
 - **Entry** save refuses another day while an open overnight exists (dialog: edit open day / discard & save). Overnight clock-out earlier than clock-in asks for confirmation before save.
 - Optional **lunch start** and **lunch end**. If either is left blank, lunch did not occur and is not subtracted.
 - Hours are calculated from clock times (minus lunch when both lunch fields are set) and rounded to hundredths. Hours cannot be typed.
@@ -47,6 +47,7 @@ Pure Kotlin / JUnit tests under `app/src/test/java/.../` cover:
   Repository delegate)
 - `CsvExporter.buildCsv` — header, row formatting, Locale.US clocks, comment escaping
   (commas / quotes / newlines); no `Context` required
+- `HomeManualTimes` — Save enablement, overnight confirm, lunch preserve, picker defaults
 
 **Room clock-state write paths still need a device / emulator / local SDK.**
 `clockInNow` / `clockOutNow` / `saveEntry` / discard / overnight upserts go through
@@ -76,6 +77,7 @@ app/src/main/java/com/rmltd/workhourstracker/
 ├── util/HoursCalc.kt            # Clock-in/out → hours to hundredths
 ├── util/VoiceShiftParser.kt     # Whole-shift + single-time speech parsing
 ├── util/CsvExporter.kt          # CSV build + FileProvider share intent
+├── util/HomeManualTimes.kt      # Home manual in/out save helpers (pure)
 ├── viewmodel/WorkHoursViewModel.kt
 ├── worker/
 │   ├── ReminderScheduler.kt     # Arms the daily + weekly AlarmManager alarms

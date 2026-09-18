@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -20,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
+import com.rmltd.workhourstracker.data.SaveEntryResult
+import com.rmltd.workhourstracker.util.HomeManualTimes
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.LocalDate
@@ -50,6 +53,81 @@ fun HomeScreen(
     val remaining = max(0.0, weeklyGoal - total)
 
     var showOvernightDialog by remember { mutableStateOf(false) }
+    var showManualOvernightConfirm by remember { mutableStateOf(false) }
+    var showManualBlockedOvernight by remember { mutableStateOf(false) }
+    var manualOpenOvernightDate by remember { mutableStateOf<LocalDate?>(null) }
+    var homePickerField by remember { mutableStateOf<HomeClockField?>(null) }
+
+    val todayEntry = viewModel.entryFor(today, entries)
+    var homeInMinutes by remember(
+        todayEntry?.dateEpochDay,
+        todayEntry?.clockInMinutes,
+        todayEntry?.clockOutMinutes
+    ) {
+        mutableStateOf(todayEntry?.clockInMinutes)
+    }
+    var homeOutMinutes by remember(
+        todayEntry?.dateEpochDay,
+        todayEntry?.clockInMinutes,
+        todayEntry?.clockOutMinutes
+    ) {
+        mutableStateOf(todayEntry?.clockOutMinutes)
+    }
+
+    fun performHomeManualSave(forceDiscard: Boolean = false) {
+        val start = homeInMinutes ?: return
+        val end = homeOutMinutes ?: return
+        val (lunchOut, lunchIn) = HomeManualTimes.lunchToPreserve(
+            todayEntry?.lunchOutMinutes,
+            todayEntry?.lunchInMinutes
+        )
+        val comments = todayEntry?.comments.orEmpty()
+        if (forceDiscard) {
+            viewModel.discardOpenAndSaveEntry(
+                date = today,
+                clockInMinutes = start,
+                clockOutMinutes = end,
+                comments = comments,
+                lunchOutMinutes = lunchOut,
+                lunchInMinutes = lunchIn
+            ) {
+                Toast.makeText(context, "Saved today's times", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            viewModel.saveEntry(
+                date = today,
+                clockInMinutes = start,
+                clockOutMinutes = end,
+                comments = comments,
+                lunchOutMinutes = lunchOut,
+                lunchInMinutes = lunchIn
+            ) { result ->
+                when (result) {
+                    is SaveEntryResult.Saved -> {
+                        Toast.makeText(context, "Saved today's times", Toast.LENGTH_SHORT).show()
+                    }
+                    is SaveEntryResult.BlockedOvernightOpen -> {
+                        manualOpenOvernightDate = result.openDate
+                        showManualBlockedOvernight = true
+                    }
+                }
+            }
+        }
+    }
+
+    fun tryHomeManualSave() {
+        val start = homeInMinutes
+        val end = homeOutMinutes
+        if (!HomeManualTimes.canSave(start, end)) {
+            Toast.makeText(context, "Set clock in and clock out", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (HomeManualTimes.needsOvernightConfirm(start!!, end!!)) {
+            showManualOvernightConfirm = true
+        } else {
+            performHomeManualSave()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -183,6 +261,37 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 4.dp)
                 )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Or set today's times",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(8.dp))
+                HomeClockTimeRow(
+                    label = "Clock in",
+                    minutes = homeInMinutes,
+                    onPick = { homePickerField = HomeClockField.IN }
+                )
+                Spacer(Modifier.height(8.dp))
+                HomeClockTimeRow(
+                    label = "Clock out",
+                    minutes = homeOutMinutes,
+                    onPick = { homePickerField = HomeClockField.OUT }
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { tryHomeManualSave() },
+                    enabled = HomeManualTimes.canSave(homeInMinutes, homeOutMinutes) && !clockBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Save today's times")
+                }
+                Text(
+                    "Uses the same save rules as Edit day (overnight guards included). Existing lunch is kept when present; edit the day to change lunch.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
 
             Spacer(Modifier.height(16.dp))
@@ -281,6 +390,139 @@ fun HomeScreen(
             confirmButton = {
                 TextButton(onClick = { showOvernightDialog = false }) { Text("Cancel") }
             }
+        )
+    }
+
+    homePickerField?.let { field ->
+        HomeClockPickerDialog(
+            field = field,
+            currentMinutes = when (field) {
+                HomeClockField.IN -> homeInMinutes
+                HomeClockField.OUT -> homeOutMinutes
+            },
+            onConfirm = { minutes ->
+                when (field) {
+                    HomeClockField.IN -> homeInMinutes = minutes
+                    HomeClockField.OUT -> homeOutMinutes = minutes
+                }
+                homePickerField = null
+            },
+            onDismiss = { homePickerField = null }
+        )
+    }
+
+    if (showManualOvernightConfirm) {
+        val hoursLabel = if (homeInMinutes != null && homeOutMinutes != null) {
+            HoursCalc.formatHours(
+                HoursCalc.hoursWorked(homeInMinutes!!, homeOutMinutes!!)
+            )
+        } else {
+            "~?"
+        }
+        AlertDialog(
+            onDismissRequest = { showManualOvernightConfirm = false },
+            title = { Text("Overnight shift?") },
+            text = {
+                Text("Clock out is earlier than clock in. Treat as overnight ($hoursLabel)?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showManualOvernightConfirm = false
+                        performHomeManualSave()
+                    }
+                ) { Text("Save as overnight") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManualOvernightConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showManualBlockedOvernight) {
+        val openDay = manualOpenOvernightDate ?: today.minusDays(1)
+        AlertDialog(
+            onDismissRequest = { showManualBlockedOvernight = false },
+            title = { Text("Open overnight punch") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Another day still has an open clock-in with no clock-out. " +
+                            "Finish that day first, or discard the open punch to save today."
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = {
+                            showManualBlockedOvernight = false
+                            onDayClick(openDay)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Edit open day") }
+                    TextButton(
+                        onClick = {
+                            showManualBlockedOvernight = false
+                            performHomeManualSave(forceDiscard = true)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Discard open punch & save") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showManualBlockedOvernight = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+private enum class HomeClockField { IN, OUT }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeClockPickerDialog(
+    field: HomeClockField,
+    currentMinutes: Int?,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val initial = currentMinutes ?: HomeManualTimes.defaultPickerMinutes(field == HomeClockField.IN)
+    val state = rememberTimePickerState(
+        initialHour = initial / 60,
+        initialMinute = initial % 60,
+        is24Hour = false
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour * 60 + state.minute) }) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        title = {
+            Text(if (field == HomeClockField.IN) "Clock in" else "Clock out")
+        },
+        text = {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TimePicker(state = state)
+            }
+        }
+    )
+}
+
+@Composable
+private fun HomeClockTimeRow(
+    label: String,
+    minutes: Int?,
+    onPick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onPick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(Icons.Filled.Schedule, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (minutes == null) label else "$label  ${HoursCalc.formatClock(minutes)}"
         )
     }
 }
