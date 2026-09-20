@@ -357,4 +357,51 @@ class ClockDayStateTest {
         )
     }
 
+
+
+    @Test
+    fun clockOut_legacyClosedToday_failedNotOvernight() {
+        // decideClockOut does not take hours; legacy (null clocks) with no overnight → FAILED
+        assertEquals(
+            ClockOutResult.FAILED,
+            ClockDayState.decideClockOut(null, null, null, null, fivePm)
+        )
+        // Overnight yesterday still wins when today has no clocks (UI disables in via legacy
+        // only through classify/hours — repository clockOut path uses decideClockOut alone).
+        assertEquals(
+            ClockOutResult.SUCCESS_OVERNIGHT,
+            ClockDayState.decideClockOut(null, null, tenPm, null, sixAm)
+        )
+    }
+
+    @Test
+    fun clockIn_orphanOutOnly_treatedAsEmpty_starts() {
+        // Out without in and zero hours → EMPTY → can start a new open punch
+        assertEquals(ClockDayState.Kind.EMPTY, ClockDayState.classify(null, fivePm, 0.0))
+        assertEquals(
+            ClockInResult.STARTED,
+            ClockDayState.decideClockIn(null, fivePm, 0.0, null, null)
+        )
+    }
+
+    @Test
+    fun clockOut_openToday_outBeforeIn_stillSuccess_overnightSameDay() {
+        // Same-day open with out earlier than in is still SUCCESS (hours path uses overnight math);
+        // only equal wall is rejected as FAILED.
+        assertEquals(
+            ClockOutResult.SUCCESS,
+            ClockDayState.decideClockOut(tenPm, null, null, null, sixAm)
+        )
+    }
+
+    @Test
+    fun ui_orphanOutOnly_behavesAsEmpty() {
+        val ui = ClockDayState.deriveHomeClockUi(
+            entry(today, clockOut = fivePm, hours = 0.0),
+            null
+        )
+        assertTrue(ui.clockInEnabled)
+        assertFalse(ui.clockOutEnabled)
+        assertFalse(ui.overnightPending)
+    }
 }

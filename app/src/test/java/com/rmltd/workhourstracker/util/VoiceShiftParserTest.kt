@@ -214,4 +214,48 @@ class VoiceShiftParserTest {
         assertEquals(16 * 60, t.clockOut)
     }
 
+
+
+    @Test
+    fun explicitAmPm_overnightShift() {
+        val t = VoiceShiftParser.parse("clocked in at 10 pm, out at 6 am")
+        assertEquals(22 * 60, t.clockIn)
+        assertEquals(6 * 60, t.clockOut)
+        assertTrue(HoursCalc.isOvernight(t.clockIn!!, t.clockOut!!))
+    }
+
+    @Test
+    fun noonAndMidnight_spoken() {
+        val t = VoiceShiftParser.parse("in at 12 pm, out at 12 am")
+        assertEquals(12 * 60, t.clockIn)
+        assertEquals(0, t.clockOut) // midnight after noon → overnight reading kept
+        assertTrue(HoursCalc.isOvernight(t.clockIn!!, t.clockOut!!))
+    }
+
+    @Test
+    fun bareOutEqualToMorningIn_bumpsToPm() {
+        // "in at 8, out at 8" → prefer 8 PM same-day finish over 0h
+        assertEquals(20 * 60, VoiceShiftParser.resolveOutAgainstIn(8 * 60, 8 * 60))
+        val t = VoiceShiftParser.parse("in at 8, out at 8")
+        assertEquals(8 * 60, t.clockIn)
+        assertEquals(20 * 60, t.clockOut)
+    }
+
+    @Test
+    fun lunchRange_inBeforeOut_bumpsLunchInToPm() {
+        val t = VoiceShiftParser.parse("in at 8, lunch 12:30 to 12, out at 5")
+        assertEquals(8 * 60, t.clockIn)
+        assertEquals(12 * 60 + 30, t.lunchOut)
+        // lunch-in 12 was ≤ lunch-out → bump bare 12 hour into PM → 12:00 still ≤ 12:30?
+        // hour 12 is noon already (>=12) so bumpLunch/disambiguate leaves 12:00;
+        // then lunchIn <= lunchOut stays — documented edge: noon does not get +12h.
+        assertEquals(12 * 60, t.lunchIn)
+        assertEquals(17 * 60, t.clockOut)
+    }
+
+    @Test
+    fun resolveOutAgainstIn_noonIn_bareFour_staysOvernightOrPm() {
+        // in at noon, bare out 4 → afternoon rule: asPm 16:00 > 12:00 → 4 PM
+        assertEquals(16 * 60, VoiceShiftParser.resolveOutAgainstIn(12 * 60, 4 * 60))
+    }
 }

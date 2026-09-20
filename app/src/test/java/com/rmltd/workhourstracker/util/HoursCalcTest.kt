@@ -232,4 +232,52 @@ class HoursCalcTest {
         }
     }
 
+
+
+    @Test
+    fun durationMinutes_equalWall_isZero() {
+        assertEquals(0, HoursCalc.durationMinutes(9 * 60, 9 * 60))
+        assertEquals(0, HoursCalc.durationMinutes(0, 0))
+    }
+
+    @Test
+    fun oneMinuteShift_andNearFullDayOvernight() {
+        val minute = HoursCalc.worked(9 * 60, 9 * 60 + 1)
+        assertEquals(0.02, minute.hours, 0.001)
+        assertFalse(minute.overnight)
+        // 23:59 → 00:00 = 1 minute overnight
+        val overnightMinute = HoursCalc.worked(23 * 60 + 59, 0)
+        assertEquals(0.02, overnightMinute.hours, 0.001)
+        assertTrue(overnightMinute.overnight)
+        // 00:00 → 23:59 = 23h 59m day shift
+        val almostDay = HoursCalc.worked(0, 23 * 60 + 59)
+        assertEquals(23.98, almostDay.hours, 0.001)
+        assertFalse(almostDay.overnight)
+    }
+
+    @Test
+    fun equalFullDay_eveningLunch_appliesOnTimeline() {
+        // 22:00→22:00 (24h): wall 21:00–21:30 expands past midnight onto the
+        // next evening inside the 24h window → lunch applies (23.50h).
+        val applied = HoursCalc.worked(
+            22 * 60,
+            22 * 60,
+            lunchOutMinutes = 21 * 60,
+            lunchInMinutes = 21 * 60 + 30,
+            equalOutMeansFullDay = true
+        )
+        assertEquals(23.50, applied.hours, 0.001)
+        assertTrue(applied.lunchApplied)
+        assertTrue(applied.overnight)
+        // Equal lunch out/in still ignored on a full-day shift
+        val ignored = HoursCalc.worked(
+            22 * 60,
+            22 * 60,
+            lunchOutMinutes = 2 * 60,
+            lunchInMinutes = 2 * 60,
+            equalOutMeansFullDay = true
+        )
+        assertEquals(24.00, ignored.hours, 0.001)
+        assertFalse(ignored.lunchApplied)
+    }
 }
