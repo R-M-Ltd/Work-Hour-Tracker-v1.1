@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.receiver.DailyReminderReceiver
 import com.rmltd.workhourstracker.receiver.WeeklyResetReceiver
@@ -20,7 +21,8 @@ import java.time.LocalDateTime
  *
  * Each alarm reschedules its own next occurrence when it fires (see the
  * receivers in this package), and [com.rmltd.workhourstracker.receiver.BootReceiver]
- * re-arms both after a device reboot, since exact alarms do not survive one.
+ * re-arms both after a device reboot or app update (`MY_PACKAGE_REPLACED`),
+ * since exact alarms do not survive those.
  */
 object ReminderScheduler {
 
@@ -67,6 +69,28 @@ object ReminderScheduler {
             data = Uri.parse("package:${context.packageName}")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+        context.startActivity(intent)
+    }
+
+    /** True when the user has allowed this app to post notifications. */
+    fun areNotificationsEnabled(context: Context): Boolean =
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+    /**
+     * Opens the system notification settings for this app so the user can
+     * re-enable POST_NOTIFICATIONS / channel alerts when denied.
+     */
+    fun openAppNotificationSettings(context: Context) {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            }
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
     }
 

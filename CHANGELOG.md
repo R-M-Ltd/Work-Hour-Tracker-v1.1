@@ -3,6 +3,16 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.10] — versionCode 12
+
+- Entry: load the navigated day via date-scoped Room read (`entryForDateOnce`), not only `currentWeekEntries`, so overnight **Edit yesterday** across a week boundary shows stored clocks/lunch/comments (avoids blank Save overwrite).
+- Save / discard-and-save share the same ViewModel `clockFlightMutex` + `clockOpInProgress` and repository `clockMutex` as clock-in/out.
+- `BootReceiver` also handles `MY_PACKAGE_REPLACED` so reminders re-arm after an app update (BOOT_COMPLETED unchanged).
+- Settings: when notifications are denied, show clear guidance + Allow / Open notification settings CTAs (reminders are not silent-fail).
+- JVM tests for `EntryFormSeed` (date-scoped seed / out-of-week detection).
+
+**Device smoke:** overnight open punch → next calendar day after week-start rollover → Home **Edit yesterday** → Entry must show yesterday's clock-in (not blank) → Save must not wipe; deny POST_NOTIFICATIONS → Settings shows blocked guidance.
+
 ## [1.3.9] — versionCode 11
 
 - Home: Material TimePicker rows for today's clock-in and clock-out, with **Save today's times** (keeps existing Clock in/out now).

@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.SaveEntryResult
+import com.rmltd.workhourstracker.util.EntryFormSeed
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.VoiceShiftParser
 import com.rmltd.workhourstracker.util.extractClockMinutes
@@ -48,15 +49,39 @@ fun EntryScreen(
     onEditOpenDay: (LocalDate) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val entries by viewModel.currentWeekEntries.collectAsState()
-    val existing = viewModel.entryFor(date, entries)
+    val clockBusy by viewModel.clockOpInProgress.collectAsState()
 
-    var clockInMinutes by remember(existing) { mutableStateOf(existing?.clockInMinutes) }
-    var clockOutMinutes by remember(existing) { mutableStateOf(existing?.clockOutMinutes) }
-    var lunchOutMinutes by remember(existing) { mutableStateOf(existing?.lunchOutMinutes) }
-    var lunchInMinutes by remember(existing) { mutableStateOf(existing?.lunchInMinutes) }
-    var comments by remember(existing) { mutableStateOf(existing?.comments ?: "") }
+    // Date-scoped once-load (not currentWeekEntries) so overnight "Edit yesterday"
+    // across a week boundary still shows Room clocks instead of a blank form.
+    var clockInMinutes by remember(date) { mutableStateOf<Int?>(null) }
+    var clockOutMinutes by remember(date) { mutableStateOf<Int?>(null) }
+    var lunchOutMinutes by remember(date) { mutableStateOf<Int?>(null) }
+    var lunchInMinutes by remember(date) { mutableStateOf<Int?>(null) }
+    var comments by remember(date) { mutableStateOf("") }
+    var entryLoadDone by remember(date) { mutableStateOf(false) }
     var pickerField by remember { mutableStateOf<ClockField?>(null) }
+
+    LaunchedEffect(date) {
+        entryLoadDone = false
+        val loaded = viewModel.loadEntryForDate(date)
+        val seed = if (loaded != null) {
+            EntryFormSeed.fromLoaded(
+                loaded.clockInMinutes,
+                loaded.clockOutMinutes,
+                loaded.lunchOutMinutes,
+                loaded.lunchInMinutes,
+                loaded.comments
+            )
+        } else {
+            EntryFormSeed.empty()
+        }
+        clockInMinutes = seed.clockInMinutes
+        clockOutMinutes = seed.clockOutMinutes
+        lunchOutMinutes = seed.lunchOutMinutes
+        lunchInMinutes = seed.lunchInMinutes
+        comments = seed.comments
+        entryLoadDone = true
+    }
     /** Mode for the in-flight speech request; set at launch, read in the result callback (L3). */
     var pendingVoiceMode by remember { mutableStateOf<VoiceMode?>(null) }
     var showOvernightConfirm by remember { mutableStateOf(false) }
@@ -290,10 +315,14 @@ fun EntryScreen(
 
             Button(
                 onClick = { trySave() },
-                enabled = clockInMinutes != null && clockOutMinutes != null && clockInMinutes != clockOutMinutes,
+                enabled = entryLoadDone &&
+                    !clockBusy &&
+                    clockInMinutes != null &&
+                    clockOutMinutes != null &&
+                    clockInMinutes != clockOutMinutes,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save")
+                Text(if (clockBusy) "Saving…" else "Save")
             }
         }
     }

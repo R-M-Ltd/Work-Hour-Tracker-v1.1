@@ -10,10 +10,14 @@ import com.rmltd.workhourstracker.worker.WeeklyResetWorker
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+        val action = intent.action ?: return
+        if (action == Intent.ACTION_BOOT_COMPLETED ||
+            action == Intent.ACTION_MY_PACKAGE_REPLACED
+        ) {
             ReminderScheduler.scheduleDailyReminder(context)
             ReminderScheduler.scheduleWeeklyReset(context)
-            // Catch up any week archives missed while the device was powered off.
+            // Catch up any week archives missed while the device was powered off
+            // (or alarms cleared by an app update).
             WorkManager.getInstance(context)
                 .enqueue(OneTimeWorkRequestBuilder<WeeklyResetWorker>().build())
         }

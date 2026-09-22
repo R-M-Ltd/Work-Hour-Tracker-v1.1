@@ -14,6 +14,7 @@ import com.rmltd.workhourstracker.data.WeekLog
 import com.rmltd.workhourstracker.data.WorkHoursRepository
 import com.rmltd.workhourstracker.util.WeekUtils
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -92,6 +93,11 @@ class WorkHoursViewModel(
 
     fun runningTotal(entries: List<DailyEntry>): Double = entries.sumOf { it.hoursWorked }
 
+    /**
+     * Same single-flight mutex / [clockOpInProgress] as clock-in/out so rapid
+     * Save + Clock out cannot race at Room. Waits (does not drop) if a clock
+     * op holds the mutex; also covered by repository [clockMutex].
+     */
     fun saveEntry(
         date: LocalDate,
         clockInMinutes: Int,
@@ -102,10 +108,17 @@ class WorkHoursViewModel(
         onResult: (SaveEntryResult) -> Unit = {}
     ) {
         viewModelScope.launch {
-            val result = repository.saveEntry(
-                date, clockInMinutes, clockOutMinutes, comments, lunchOutMinutes, lunchInMinutes
-            )
-            onResult(result)
+            clockFlightMutex.withLock {
+                _clockOpInProgress.value = true
+                try {
+                    val result = repository.saveEntry(
+                        date, clockInMinutes, clockOutMinutes, comments, lunchOutMinutes, lunchInMinutes
+                    )
+                    onResult(result)
+                } finally {
+                    _clockOpInProgress.value = false
+                }
+            }
         }
     }
 
@@ -119,12 +132,27 @@ class WorkHoursViewModel(
         onDone: () -> Unit = {}
     ) {
         viewModelScope.launch {
-            repository.discardOpenAndSaveEntry(
-                date, clockInMinutes, clockOutMinutes, comments, lunchOutMinutes, lunchInMinutes
-            )
-            onDone()
+            clockFlightMutex.withLock {
+                _clockOpInProgress.value = true
+                try {
+                    repository.discardOpenAndSaveEntry(
+                        date, clockInMinutes, clockOutMinutes, comments, lunchOutMinutes, lunchInMinutes
+                    )
+                    onDone()
+                } finally {
+                    _clockOpInProgress.value = false
+                }
+            }
         }
     }
+
+    /** Date-scoped once-load for Entry (covers overnight edit outside current week). */
+    suspend fun loadEntryForDate(date: LocalDate): DailyEntry? =
+        repository.entryForDateOnce(date)
+
+    /** Date-scoped Flow for Entry; prefer [loadEntryForDate] for one-shot seed. */
+    fun entryForDate(date: LocalDate): Flow<DailyEntry?> =
+        repository.entryForDate(date)
 
 
     /**

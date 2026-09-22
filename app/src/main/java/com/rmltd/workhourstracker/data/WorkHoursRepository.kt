@@ -72,6 +72,10 @@ class WorkHoursRepository(
     suspend fun entryForDateOnce(date: LocalDate): DailyEntry? =
         dao.entryForDateOnce(date.toEpochDay())
 
+    /** Date-scoped Flow — used when Entry navigates outside the configured current week. */
+    fun entryForDate(date: LocalDate): Flow<DailyEntry?> =
+        dao.entryForDate(date.toEpochDay())
+
     fun homeClockUi(today: LocalDate = LocalDate.now()): Flow<HomeClockUi> =
         combine(
             dao.entryForDate(today.toEpochDay()),
@@ -94,11 +98,11 @@ class WorkHoursRepository(
         lunchInMinutes: Int? = null,
         forceAfterDiscard: Boolean = false,
         equalOutMeansFullDay: Boolean = false
-    ): SaveEntryResult {
+    ): SaveEntryResult = clockMutex.withLock {
         if (!forceAfterDiscard) {
             val open = dao.findOpenEntry()
             if (open != null && open.dateEpochDay != date.toEpochDay()) {
-                return SaveEntryResult.BlockedOvernightOpen(
+                return@withLock SaveEntryResult.BlockedOvernightOpen(
                     LocalDate.ofEpochDay(open.dateEpochDay)
                 )
             }
@@ -112,7 +116,7 @@ class WorkHoursRepository(
             lunchInMinutes,
             equalOutMeansFullDay
         )
-        return SaveEntryResult.Saved
+        SaveEntryResult.Saved
     }
 
     /** Unchecked write used by clock-out paths (already inside mutex / state checks). */

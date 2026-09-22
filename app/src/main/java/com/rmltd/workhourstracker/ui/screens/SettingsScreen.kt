@@ -1,6 +1,11 @@
 package com.rmltd.workhourstracker.ui.screens
 
 import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -47,11 +52,20 @@ fun SettingsScreen(
     var exactAlarmsAllowed by remember {
         mutableStateOf(ReminderScheduler.canScheduleExactAlarms(context))
     }
+    var notificationsAllowed by remember {
+        mutableStateOf(ReminderScheduler.areNotificationsEnabled(context))
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        notificationsAllowed = ReminderScheduler.areNotificationsEnabled(context)
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 exactAlarmsAllowed = ReminderScheduler.canScheduleExactAlarms(context)
+                notificationsAllowed = ReminderScheduler.areNotificationsEnabled(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -198,6 +212,43 @@ fun SettingsScreen(
             ) {
                 val (hour, minute) = reminderTime
                 Text("Reminder time: ${HoursCalc.formatClock(hour * 60 + minute)}")
+            }
+
+            if (!notificationsAllowed) {
+                HorizontalDivider()
+                Text("Notifications blocked", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Daily reminders will not appear while notification permission is denied. " +
+                        "Allow notifications for Work Hours Tracker so reminders can fire.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    OutlinedButton(
+                        onClick = {
+                            val granted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (granted) {
+                                // Channel / app-level block — open system settings.
+                                ReminderScheduler.openAppNotificationSettings(context)
+                            } else {
+                                notificationPermissionLauncher.launch(
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Allow notifications")
+                    }
+                }
+                OutlinedButton(
+                    onClick = { ReminderScheduler.openAppNotificationSettings(context) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Open notification settings")
+                }
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !exactAlarmsAllowed) {
