@@ -3,6 +3,12 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.12] — versionCode 14
+
+- Home: clear **History** entry points (top-bar History icon + bottom History button) navigate to the existing History (`LogScreen`) on a separate screen.
+- Settings: in-app **Font style** (Default / Sans Serif / Serif / Monospace) persisted via `ThemePreferences` and applied app-wide through `WorkHoursTheme` typography.
+- Settings: **Color** section label is tappable — expands/collapses the same theme radio list (second entry point alongside the radios).
+
 ## [1.3.11] — versionCode 13
 
 - Settings: color theme switcher (Purple / Blue / Red / Green / Orange); preference persisted like reminder/week-start/goal.

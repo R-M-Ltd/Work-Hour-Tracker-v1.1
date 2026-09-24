@@ -55,7 +55,8 @@ class MainActivity : ComponentActivity() {
         lifecycle.addObserver(lifecycleRefreshObserver)
         setContent {
             val colorTheme by viewModel.colorTheme.collectAsState()
-            WorkHoursTheme(theme = colorTheme) {
+            val fontStyle by viewModel.fontStyle.collectAsState()
+            WorkHoursTheme(theme = colorTheme, fontStyle = fontStyle) {
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { /* No-op either way — the app is fully usable without notifications. */ }

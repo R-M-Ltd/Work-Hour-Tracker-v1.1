@@ -10,6 +10,7 @@ import com.rmltd.workhourstracker.data.DailyEntry
 import com.rmltd.workhourstracker.data.HomeClockUi
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.data.ThemePreferences
+import com.rmltd.workhourstracker.ui.theme.AppFontStyle
 import com.rmltd.workhourstracker.ui.theme.AppTheme
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.data.WeekLog
@@ -63,6 +64,9 @@ class WorkHoursViewModel(
 
     private val _colorTheme = MutableStateFlow(ThemePreferences.getColorTheme(appContext))
     val colorTheme: StateFlow<AppTheme> = _colorTheme
+
+    private val _fontStyle = MutableStateFlow(ThemePreferences.getFontStyle(appContext))
+    val fontStyle: StateFlow<AppFontStyle> = _fontStyle
 
     private val _weeklyGoalHours = MutableStateFlow(ReminderPreferences.getWeeklyGoalHours(appContext))
     val weeklyGoalHours: StateFlow<Double> = _weeklyGoalHours
@@ -241,6 +245,11 @@ class WorkHoursViewModel(
         _colorTheme.value = theme
     }
 
+    fun setFontStyle(style: AppFontStyle) {
+        ThemePreferences.setFontStyle(appContext, style)
+        _fontStyle.value = style
+    }
+
     fun notifyPrefsChanged(weekStartChanged: Boolean = false) {
         _weeklyGoalHours.value = ReminderPreferences.getWeeklyGoalHours(appContext)
         _weekStartDay.value = weekStartDay()
@@ -264,6 +273,7 @@ class WorkHoursViewModel(
         _weeklyGoalHours.value = ReminderPreferences.getWeeklyGoalHours(appContext)
         _weekStartDay.value = weekStartDay()
         _colorTheme.value = ThemePreferences.getColorTheme(appContext)
+        _fontStyle.value = ThemePreferences.getFontStyle(appContext)
         viewModelScope.launch {
             runCatching { repository.catchUpWeekArchives() }
         }

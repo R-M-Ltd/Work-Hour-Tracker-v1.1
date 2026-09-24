@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -11,6 +12,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 
 /**
  * Color themes for Work Hours Tracker.
@@ -274,9 +276,34 @@ fun colorSchemeFor(theme: AppTheme, darkTheme: Boolean): ColorScheme = when (the
     AppTheme.ORANGE -> if (darkTheme) OrangeDark else OrangeLight
 }
 
+/** Apply [fontFamily] to every role of the Material3 default [Typography]. */
+fun typographyFor(fontStyle: AppFontStyle): Typography {
+    val fontFamily = fontStyle.toFontFamily()
+    val base = Typography()
+    fun TextStyle.withFamily(): TextStyle = copy(fontFamily = fontFamily)
+    return Typography(
+        displayLarge = base.displayLarge.withFamily(),
+        displayMedium = base.displayMedium.withFamily(),
+        displaySmall = base.displaySmall.withFamily(),
+        headlineLarge = base.headlineLarge.withFamily(),
+        headlineMedium = base.headlineMedium.withFamily(),
+        headlineSmall = base.headlineSmall.withFamily(),
+        titleLarge = base.titleLarge.withFamily(),
+        titleMedium = base.titleMedium.withFamily(),
+        titleSmall = base.titleSmall.withFamily(),
+        bodyLarge = base.bodyLarge.withFamily(),
+        bodyMedium = base.bodyMedium.withFamily(),
+        bodySmall = base.bodySmall.withFamily(),
+        labelLarge = base.labelLarge.withFamily(),
+        labelMedium = base.labelMedium.withFamily(),
+        labelSmall = base.labelSmall.withFamily()
+    )
+}
+
 @Composable
 fun WorkHoursTheme(
     theme: AppTheme = AppTheme.DEFAULT,
+    fontStyle: AppFontStyle = AppFontStyle.DEFAULT_STYLE,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
@@ -288,5 +315,9 @@ fun WorkHoursTheme(
         else -> colorSchemeFor(theme, darkTheme)
     }
 
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = typographyFor(fontStyle),
+        content = content
+    )
 }

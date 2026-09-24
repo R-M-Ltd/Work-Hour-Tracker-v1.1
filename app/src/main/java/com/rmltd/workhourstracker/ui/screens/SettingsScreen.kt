@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.data.ThemePreferences
+import com.rmltd.workhourstracker.ui.theme.AppFontStyle
 import com.rmltd.workhourstracker.ui.theme.AppTheme
 import com.rmltd.workhourstracker.ui.theme.previewPrimary
 import com.rmltd.workhourstracker.util.HoursCalc
@@ -58,6 +60,8 @@ fun SettingsScreen(
         )
     }
     var colorTheme by remember { mutableStateOf(ThemePreferences.getColorTheme(context)) }
+    var fontStyle by remember { mutableStateOf(ThemePreferences.getFontStyle(context)) }
+    var colorSectionExpanded by remember { mutableStateOf(true) }
     var exactAlarmsAllowed by remember {
         mutableStateOf(ReminderScheduler.canScheduleExactAlarms(context))
     }
@@ -278,50 +282,99 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
-            Text("Color theme", style = MaterialTheme.typography.titleMedium)
+            // "Color" label is a second entry point: tap expands/collapses the same theme radios.
             Text(
-                "Light/dark still follows the system setting. Pick a color palette below.",
+                "Color",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        colorSectionExpanded = !colorSectionExpanded
+                    }
+            )
+            Text(
+                "Light/dark still follows the system setting. Tap Color to show or hide palettes, or pick a radio below.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (colorSectionExpanded) {
+                Spacer(Modifier.height(8.dp))
+                AppTheme.entries.forEach { option ->
+                    val selected = colorTheme == option
+                    val shape = RoundedCornerShape(12.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(shape)
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                                else Color.Transparent
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selected,
+                            onClick = {
+                                colorTheme = option
+                                viewModel.setColorTheme(option)
+                                Toast.makeText(
+                                    context,
+                                    "${option.displayName} theme",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(option.previewPrimary())
+                        )
+                        Text(
+                            option.displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            Text("Font style", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Applies app-wide (independent of the phone system font). Default matches Material.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
-            AppTheme.entries.forEach { option ->
-                val selected = colorTheme == option
-                val shape = RoundedCornerShape(12.dp)
+            AppFontStyle.entries.forEach { option ->
+                val selected = fontStyle == option
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clip(shape)
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-                            else Color.Transparent
-                        )
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                        .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     RadioButton(
                         selected = selected,
                         onClick = {
-                            colorTheme = option
-                            viewModel.setColorTheme(option)
+                            fontStyle = option
+                            viewModel.setFontStyle(option)
                             Toast.makeText(
                                 context,
-                                "${option.displayName} theme",
+                                "${option.displayName} font",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
                     )
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(option.previewPrimary())
-                    )
                     Text(
                         option.displayName,
                         style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(start = 12.dp)
+                        modifier = Modifier.padding(start = 8.dp)
                     )
                 }
             }

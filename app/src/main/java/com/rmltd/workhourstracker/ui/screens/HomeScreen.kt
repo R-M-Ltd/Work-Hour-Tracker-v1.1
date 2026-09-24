@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -143,6 +144,9 @@ fun HomeScreen(
                     actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 actions = {
+                    IconButton(onClick = onViewLog) {
+                        Icon(Icons.Filled.History, contentDescription = "History")
+                    }
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
@@ -347,7 +351,9 @@ fun HomeScreen(
 
             Spacer(Modifier.height(16.dp))
             OutlinedButton(onClick = onViewLog, modifier = Modifier.fillMaxWidth()) {
-                Text("View History & To-Date Hours")
+                Icon(Icons.Filled.History, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("History")
             }
         }
     }
