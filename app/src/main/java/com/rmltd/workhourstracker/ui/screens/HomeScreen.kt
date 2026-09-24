@@ -1,9 +1,11 @@
 package com.rmltd.workhourstracker.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -16,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -130,9 +133,15 @@ fun HomeScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = { Text("This Week") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 actions = {
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
@@ -147,7 +156,12 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
                 Row(
                     modifier = Modifier
                         .padding(16.dp)
@@ -162,12 +176,14 @@ fun HomeScreen(
                             progress = progress,
                             modifier = Modifier.fillMaxSize(),
                             strokeWidth = 8.dp,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
                         )
                         Text(
                             "${(progress * 100).toInt()}%",
                             style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                     Spacer(Modifier.width(16.dp))
@@ -175,17 +191,20 @@ fun HomeScreen(
                         Text(
                             "${weekStart.format(DateTimeFormatter.ofPattern("MMM d"))} – " +
                                 daysInWeek.last().format(DateTimeFormatter.ofPattern("MMM d")),
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "Total: ${formatHours(total)}",
                             style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
                             "Goal ${formatHours(weeklyGoal)} · ${formatHours(remaining)} remaining",
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
                     }
                 }
@@ -235,7 +254,7 @@ fun HomeScreen(
                     ) {
                         Text("Clock in now")
                     }
-                    Button(
+                    FilledTonalButton(
                         onClick = {
                             viewModel.clockOutNow(today) { result ->
                                 val msg = when (result) {
@@ -259,6 +278,7 @@ fun HomeScreen(
                 Text(
                     "Sets today's time to right now (or finishes yesterday's open overnight shift). Lunch is not added — edit the day for lunch.",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
                 )
                 Spacer(Modifier.height(12.dp))
@@ -290,6 +310,7 @@ fun HomeScreen(
                 Text(
                     "Uses the same save rules as Edit day (overnight guards included). Existing lunch is kept when present; edit the day to change lunch.",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -320,7 +341,7 @@ fun HomeScreen(
                         isToday = date == today,
                         onClick = { onDayClick(date) }
                     )
-                    HorizontalDivider()
+                    Spacer(Modifier.height(4.dp))
                 }
             }
 
@@ -537,8 +558,16 @@ private fun DayRow(
     isToday: Boolean,
     onClick: () -> Unit
 ) {
+    val shape = RoundedCornerShape(12.dp)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(
+                if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                else MaterialTheme.colorScheme.surface
+            )
+            .padding(horizontal = 8.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -546,13 +575,25 @@ private fun DayRow(
             Text(
                 date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()) +
                     if (isToday) "  •  Today" else "",
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onSurface
             )
             if (clockLabel != null) {
-                Text(clockLabel, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                Text(
+                    clockLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
             }
             if (!comments.isNullOrBlank()) {
-                Text(comments, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                Text(
+                    comments,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
             }
         }
         TextButton(onClick = onClick) {
