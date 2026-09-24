@@ -9,6 +9,8 @@ import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.DailyEntry
 import com.rmltd.workhourstracker.data.HomeClockUi
 import com.rmltd.workhourstracker.data.ReminderPreferences
+import com.rmltd.workhourstracker.data.ThemePreferences
+import com.rmltd.workhourstracker.ui.theme.AppTheme
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.data.WeekLog
 import com.rmltd.workhourstracker.data.WorkHoursRepository
@@ -58,6 +60,9 @@ class WorkHoursViewModel(
             SharingStarted.WhileSubscribed(5_000),
             LocalDate.ofEpochDay(weekStartEpoch.value)
         )
+
+    private val _colorTheme = MutableStateFlow(ThemePreferences.getColorTheme(appContext))
+    val colorTheme: StateFlow<AppTheme> = _colorTheme
 
     private val _weeklyGoalHours = MutableStateFlow(ReminderPreferences.getWeeklyGoalHours(appContext))
     val weeklyGoalHours: StateFlow<Double> = _weeklyGoalHours
@@ -231,6 +236,11 @@ class WorkHoursViewModel(
      * When [weekStartChanged] is true, rebuild week_logs and rewrite daily weekStartEpochDay
      * so overlapping old/new week keys cannot double-count History / all-time.
      */
+    fun setColorTheme(theme: AppTheme) {
+        ThemePreferences.setColorTheme(appContext, theme)
+        _colorTheme.value = theme
+    }
+
     fun notifyPrefsChanged(weekStartChanged: Boolean = false) {
         _weeklyGoalHours.value = ReminderPreferences.getWeeklyGoalHours(appContext)
         _weekStartDay.value = weekStartDay()
@@ -253,6 +263,7 @@ class WorkHoursViewModel(
         homeAnchorDate.value = LocalDate.now()
         _weeklyGoalHours.value = ReminderPreferences.getWeeklyGoalHours(appContext)
         _weekStartDay.value = weekStartDay()
+        _colorTheme.value = ThemePreferences.getColorTheme(appContext)
         viewModelScope.launch {
             runCatching { repository.catchUpWeekArchives() }
         }

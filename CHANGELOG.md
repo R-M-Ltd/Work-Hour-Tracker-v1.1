@@ -3,6 +3,12 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.11] — versionCode 13
+
+- Settings: color theme switcher (Purple / Blue / Red / Green / Orange); preference persisted like reminder/week-start/goal.
+- Selected theme flows MainActivity → `WorkHoursTheme` so the UI recomposes on change; default Purple.
+- ColorSchemes use design-locked hexes from theme-mockups/palettes.json (purple/blue/red/green/orange; default purple).
+
 ## [1.3.10] — versionCode 12
 
 - Entry: load the navigated day via date-scoped Room read (`entryForDateOnce`), not only `currentWeekEntries`, so overnight **Edit yesterday** across a week boundary shows stored clocks/lunch/comments (avoids blank Save overwrite).

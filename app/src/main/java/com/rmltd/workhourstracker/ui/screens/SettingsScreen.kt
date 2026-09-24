@@ -7,7 +7,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +19,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -24,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.rmltd.workhourstracker.data.ReminderPreferences
+import com.rmltd.workhourstracker.data.ThemePreferences
+import com.rmltd.workhourstracker.ui.theme.AppTheme
+import com.rmltd.workhourstracker.ui.theme.previewPrimary
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.WeekUtils
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
@@ -49,6 +57,7 @@ fun SettingsScreen(
             "%.2f".format(Locale.US, ReminderPreferences.getWeeklyGoalHours(context))
         )
     }
+    var colorTheme by remember { mutableStateOf(ThemePreferences.getColorTheme(context)) }
     var exactAlarmsAllowed by remember {
         mutableStateOf(ReminderScheduler.canScheduleExactAlarms(context))
     }
@@ -267,10 +276,55 @@ fun SettingsScreen(
                 }
             }
 
+            HorizontalDivider()
+
+            Text("Color theme", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Theme follows the system setting.",
-                style = MaterialTheme.typography.bodySmall
+                "Light/dark still follows the system setting. Pick a color palette below.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(Modifier.height(8.dp))
+            AppTheme.entries.forEach { option ->
+                val selected = colorTheme == option
+                val shape = RoundedCornerShape(12.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clip(shape)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                            else Color.Transparent
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = selected,
+                        onClick = {
+                            colorTheme = option
+                            viewModel.setColorTheme(option)
+                            Toast.makeText(
+                                context,
+                                "${option.displayName} theme",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(option.previewPrimary())
+                    )
+                    Text(
+                        option.displayName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(start = 12.dp)
+                    )
+                }
+            }
         }
     }
 

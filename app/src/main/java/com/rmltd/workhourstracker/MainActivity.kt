@@ -13,6 +13,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.rmltd.workhourstracker.ui.navigation.AppNavHost
@@ -52,7 +54,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycle.addObserver(lifecycleRefreshObserver)
         setContent {
-            WorkHoursTheme {
+            val colorTheme by viewModel.colorTheme.collectAsState()
+            WorkHoursTheme(theme = colorTheme) {
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { /* No-op either way — the app is fully usable without notifications. */ }
