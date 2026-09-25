@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
@@ -21,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.util.EntryFormSeed
@@ -256,112 +258,163 @@ fun EntryScreen(
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OutlinedButton(
-                onClick = { launchVoice(VoiceMode.WholeShift) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Mic, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Speak whole shift")
-            }
-            Text(
-                "One utterance can fill clock in, lunch, and clock out. Per-field mics still work below.",
-                style = MaterialTheme.typography.bodySmall
-            )
-
-            ClockTimeRow(
-                label = "Clock in",
-                minutes = clockInMinutes,
-                onPick = { pickerField = ClockField.IN },
-                onSpeak = { launchVoice(VoiceMode.Field(ClockField.IN)) }
-            )
-            Text(
-                "Break / lunch (optional)",
-                style = MaterialTheme.typography.titleSmall
-            )
-            Text(
-                "Unpaid by default and subtracted from worked hours. Stays one shift — you do not need a full clock-out for lunch. Pick a duration or exact times.",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Row(
+            // Shift: voice + clock in / out
+            ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
             ) {
-                listOf(15, 30, 45, 60).forEach { mins ->
-                    val selected = breakDurationMinutes == mins &&
-                        lunchOutMinutes == null && lunchInMinutes == null
-                    FilterChip(
-                        selected = selected,
-                        onClick = {
-                            breakDurationMinutes = mins
-                            lunchOutMinutes = null
-                            lunchInMinutes = null
-                        },
-                        label = { Text("${mins}m") }
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Shift",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    OutlinedButton(
+                        onClick = { launchVoice(VoiceMode.WholeShift) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Mic, contentDescription = "Speak whole shift")
+                        Spacer(Modifier.width(8.dp))
+                        Text("Speak whole shift")
+                    }
+                    Text(
+                        "One utterance can fill clock in, lunch, and clock out. Per-field mics still work below.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    ClockTimeRow(
+                        label = "Clock in",
+                        minutes = clockInMinutes,
+                        onPick = { pickerField = ClockField.IN },
+                        onSpeak = { launchVoice(VoiceMode.Field(ClockField.IN)) }
+                    )
+                    ClockTimeRow(
+                        label = "Clock out",
+                        minutes = clockOutMinutes,
+                        onPick = { pickerField = ClockField.OUT },
+                        onSpeak = { launchVoice(VoiceMode.Field(ClockField.OUT)) }
                     )
                 }
-                if (breakDurationMinutes != null || lunchOutMinutes != null || lunchInMinutes != null) {
-                    TextButton(onClick = {
-                        breakDurationMinutes = null
-                        lunchOutMinutes = null
-                        lunchInMinutes = null
-                        breakPaid = false
-                    }) { Text("Clear") }
+            }
+
+            // Break / lunch
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "Break",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Unpaid by default and subtracted from worked hours. Stays one shift — you do not need a full clock-out for lunch. Pick a duration or exact times.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(15, 30, 45, 60).forEach { mins ->
+                            val selected = breakDurationMinutes == mins &&
+                                lunchOutMinutes == null && lunchInMinutes == null
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    breakDurationMinutes = mins
+                                    lunchOutMinutes = null
+                                    lunchInMinutes = null
+                                },
+                                label = { Text("${mins}m") }
+                            )
+                        }
+                        if (breakDurationMinutes != null || lunchOutMinutes != null || lunchInMinutes != null) {
+                            TextButton(onClick = {
+                                breakDurationMinutes = null
+                                lunchOutMinutes = null
+                                lunchInMinutes = null
+                                breakPaid = false
+                            }) { Text("Clear") }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = breakPaid,
+                            onCheckedChange = { breakPaid = it },
+                            enabled = breakDurationMinutes != null &&
+                                lunchOutMinutes == null && lunchInMinutes == null
+                        )
+                        Text(
+                            "Paid break (duration only — not subtracted)",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    ClockTimeRow(
+                        label = "Break start",
+                        minutes = lunchOutMinutes,
+                        optional = true,
+                        onPick = {
+                            breakDurationMinutes = null
+                            pickerField = ClockField.LUNCH_OUT
+                        },
+                        onClear = { lunchOutMinutes = null },
+                        onSpeak = { launchVoice(VoiceMode.Field(ClockField.LUNCH_OUT)) }
+                    )
+                    ClockTimeRow(
+                        label = "Break end",
+                        minutes = lunchInMinutes,
+                        optional = true,
+                        onPick = {
+                            breakDurationMinutes = null
+                            pickerField = ClockField.LUNCH_IN
+                        },
+                        onClear = { lunchInMinutes = null },
+                        onSpeak = { launchVoice(VoiceMode.Field(ClockField.LUNCH_IN)) }
+                    )
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Checkbox(
-                    checked = breakPaid,
-                    onCheckedChange = { breakPaid = it },
-                    enabled = breakDurationMinutes != null &&
-                        lunchOutMinutes == null && lunchInMinutes == null
-                )
-                Text(
-                    "Paid break (duration only — not subtracted)",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            ClockTimeRow(
-                label = "Break start",
-                minutes = lunchOutMinutes,
-                optional = true,
-                onPick = {
-                    breakDurationMinutes = null
-                    pickerField = ClockField.LUNCH_OUT
-                },
-                onClear = { lunchOutMinutes = null },
-                onSpeak = { launchVoice(VoiceMode.Field(ClockField.LUNCH_OUT)) }
-            )
-            ClockTimeRow(
-                label = "Break end",
-                minutes = lunchInMinutes,
-                optional = true,
-                onPick = {
-                    breakDurationMinutes = null
-                    pickerField = ClockField.LUNCH_IN
-                },
-                onClear = { lunchInMinutes = null },
-                onSpeak = { launchVoice(VoiceMode.Field(ClockField.LUNCH_IN)) }
-            )
-            ClockTimeRow(
-                label = "Clock out",
-                minutes = clockOutMinutes,
-                onPick = { pickerField = ClockField.OUT },
-                onSpeak = { launchVoice(VoiceMode.Field(ClockField.OUT)) }
-            )
 
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Hours worked", style = MaterialTheme.typography.labelLarge)
+            // Hours summary
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "Hours worked",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                     Text(
                         worked?.let { HoursCalc.formatHours(it.hours) } ?: "—",
-                        style = MaterialTheme.typography.headlineSmall
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
                         when {
@@ -383,17 +436,35 @@ fun EntryScreen(
                                 "Break ignored until both start and end are set, and both sit inside the shift."
                             else -> "Calculated from clock in and clock out. Break left blank."
                         },
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                     )
                 }
             }
 
-            OutlinedTextField(
-                value = comments,
-                onValueChange = { comments = it },
-                label = { Text("Note") },
-                modifier = Modifier.fillMaxWidth().height(140.dp)
-            )
+            // Note
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Note",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    OutlinedTextField(
+                        value = comments,
+                        onValueChange = { comments = it },
+                        label = { Text("Note") },
+                        placeholder = { Text("Optional day note") },
+                        modifier = Modifier.fillMaxWidth().height(140.dp)
+                    )
+                }
+            }
 
             Button(
                 onClick = { trySave() },

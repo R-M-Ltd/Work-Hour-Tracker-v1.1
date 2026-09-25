@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="@color/widget_primary_container" />
-    <corners android:radius="16dp" />
-</shape>
+<!-- Material glance-style card: soft container fill + 20dp corners + thin top accent. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/widget_primary_container" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+    <item
+        android:gravity="top"
+        android:height="3dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/widget_primary" />
+            <corners
+                android:topLeftRadius="20dp"
+                android:topRightRadius="20dp" />
+        </shape>
+    </item>
+</layer-list>

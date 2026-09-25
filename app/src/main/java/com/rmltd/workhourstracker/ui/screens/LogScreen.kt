@@ -179,12 +179,14 @@ fun LogScreen(
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     allTimePayEstimate?.let { pay ->
+                        Spacer(Modifier.height(4.dp))
                         Text(
                             "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.92f)
                         )
+                        Spacer(Modifier.height(4.dp))
                     }
                     Text(
                         "Sum of all logged days (including this week). " +
@@ -196,27 +198,35 @@ fun LogScreen(
                 }
             }
 
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text("Search notes") },
-                placeholder = { Text("Filter by note text or date") },
-                singleLine = true,
+            OutlinedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            )
-            Spacer(Modifier.height(8.dp))
-
-            OutlinedButton(
-                onClick = { showAddMissed = true },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Add missed punch")
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text("Search notes") },
+                        placeholder = { Text("Filter by note text or date") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedButton(
+                        onClick = { showAddMissed = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "Add missed punch")
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add missed punch")
+                    }
+                }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
             if (searchQuery.trim().isNotEmpty()) {
                 if (searchMatches.isEmpty()) {
@@ -454,23 +464,24 @@ private fun SearchResultRow(
     onEditDay: (LocalDate) -> Unit,
     onEditNote: () -> Unit
 ) {
-    ElevatedCard(
+    OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onEditDay(LocalDate.ofEpochDay(entry.dateEpochDay)) }
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     LocalDate.ofEpochDay(entry.dateEpochDay)
                         .format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")),
-                    fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
                 )
                 HoursCalc.formatDayLabel(
                     entry.clockInMinutes,
@@ -479,14 +490,28 @@ private fun SearchResultRow(
                     entry.lunchInMinutes,
                     entry.breakDurationMinutes
                 )?.let { range ->
-                    Text(range, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        range,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 if (entry.comments.isNotBlank()) {
-                    Text(entry.comments, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        entry.comments,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2
+                    )
                 }
                 TextButton(onClick = onEditNote) { Text("Edit note") }
             }
-            Text(formatHours(entry.hoursWorked))
+            Text(
+                formatHours(entry.hoursWorked),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
@@ -525,64 +550,87 @@ private fun WeekLogRow(
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(onClick = { expanded = !expanded }) {
-                    Text(formatHours(log.totalHours))
+                    Text(formatHours(log.totalHours), fontWeight = FontWeight.SemiBold)
                 }
             }
 
             if (expanded) {
-                Spacer(Modifier.height(8.dp))
-                dayEntries.forEach { entry ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onEditDay(LocalDate.ofEpochDay(entry.dateEpochDay))
-                            }
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                LocalDate.ofEpochDay(entry.dateEpochDay)
-                                    .format(DateTimeFormatter.ofPattern("EEE, MMM d"))
-                            )
-                            HoursCalc.formatDayLabel(
-                                entry.clockInMinutes,
-                                entry.clockOutMinutes,
-                                entry.lunchOutMinutes,
-                                entry.lunchInMinutes,
-                                entry.breakDurationMinutes
-                            )?.let { range ->
-                                Text(range, style = MaterialTheme.typography.bodySmall)
-                            }
-                            if (entry.comments.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(10.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dayEntries.forEach { entry ->
+                        OutlinedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onEditDay(LocalDate.ofEpochDay(entry.dateEpochDay))
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        LocalDate.ofEpochDay(entry.dateEpochDay)
+                                            .format(DateTimeFormatter.ofPattern("EEE, MMM d")),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    HoursCalc.formatDayLabel(
+                                        entry.clockInMinutes,
+                                        entry.clockOutMinutes,
+                                        entry.lunchOutMinutes,
+                                        entry.lunchInMinutes,
+                                        entry.breakDurationMinutes
+                                    )?.let { range ->
+                                        Text(
+                                            range,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (entry.comments.isNotBlank()) {
+                                        Text(
+                                            entry.comments,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2
+                                        )
+                                    }
+                                    Row {
+                                        Text(
+                                            "Edit times",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier
+                                                .clickable {
+                                                    onEditDay(LocalDate.ofEpochDay(entry.dateEpochDay))
+                                                }
+                                                .padding(end = 12.dp, top = 4.dp, bottom = 2.dp)
+                                        )
+                                        Text(
+                                            if (entry.comments.isBlank()) "Add note" else "Edit note",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.secondary,
+                                            modifier = Modifier
+                                                .clickable { onEditNote(entry) }
+                                                .padding(top = 4.dp, bottom = 2.dp)
+                                        )
+                                    }
+                                }
                                 Text(
-                                    "Note: ${entry.comments}",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            Row {
-                                Text(
-                                    "Tap to edit times",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .clickable {
-                                            onEditDay(LocalDate.ofEpochDay(entry.dateEpochDay))
-                                        }
-                                        .padding(end = 12.dp, top = 2.dp, bottom = 2.dp)
-                                )
-                                Text(
-                                    if (entry.comments.isBlank()) "Add note" else "Edit note",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier
-                                        .clickable { onEditNote(entry) }
-                                        .padding(top = 2.dp, bottom = 2.dp)
+                                    formatHours(entry.hoursWorked),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
-                        Text(formatHours(entry.hoursWorked))
                     }
                 }
             }

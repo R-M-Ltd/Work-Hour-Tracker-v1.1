@@ -245,12 +245,12 @@ fun HomeScreen(
                             color = stripOn.copy(alpha = 0.85f)
                         )
                         weekPayEstimate?.let { pay ->
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(6.dp))
                             Text(
                                 "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Medium,
-                                color = stripOn.copy(alpha = 0.9f)
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = stripOn.copy(alpha = 0.92f)
                             )
                         }
                     }
@@ -265,22 +265,31 @@ fun HomeScreen(
                     colors = CardDefaults.elevatedCardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             "Today",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(Modifier.height(8.dp))
                         if (homeClock.overnightPending) {
-                            Text(
-                                "Yesterday's shift is still open. Clock out finishes it, or use Clock in for options.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(bottom = 4.dp)
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                            ) {
+                                Text(
+                                    "Yesterday's shift is still open. Clock out finishes it, or use Clock in for options.",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -352,11 +361,15 @@ fun HomeScreen(
                                 Text("Forgot to clock out…")
                             }
                         }
-                        Spacer(Modifier.height(12.dp))
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
                         Text(
                             "Or set today's times",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(Modifier.height(8.dp))
                         HomeClockTimeRow(
@@ -687,12 +700,16 @@ private fun DayRow(
             containerColor = if (isToday) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = BorderStroke(
+            width = if (isToday) 1.5.dp else 1.dp,
+            color = if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+            else MaterialTheme.colorScheme.outlineVariant
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -700,7 +717,8 @@ private fun DayRow(
                 Text(
                     date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()) +
                         if (isToday) "  •  Today" else "",
-                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
                     color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer
                     else MaterialTheme.colorScheme.onSurface
                 )
@@ -708,7 +726,8 @@ private fun DayRow(
                     Text(
                         clockLabel,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
                     )
                 }
@@ -716,7 +735,8 @@ private fun DayRow(
                     Text(
                         comments,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
                     )
                 }
@@ -727,7 +747,8 @@ private fun DayRow(
                         hours != null && hours > 0.0 -> formatHours(hours)
                         hasEntry -> "Edit"
                         else -> "Add"
-                    }
+                    },
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }

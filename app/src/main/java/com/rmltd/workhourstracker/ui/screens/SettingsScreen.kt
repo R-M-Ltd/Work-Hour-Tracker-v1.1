@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -121,7 +122,7 @@ fun SettingsScreen(
     }
 
     val weekEndDay = WeekUtils.weekEndDayName(weekStartDay)
-    val sectionShape = RoundedCornerShape(16.dp)
+    val sectionShape = RoundedCornerShape(18.dp)
 
     Scaffold(
         topBar = {
@@ -152,7 +153,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Work week", style = MaterialTheme.typography.titleMedium)
+                    Text("Work week", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
                     ExposedDropdownMenuBox(
                         expanded = weekStartExpanded,
@@ -213,7 +214,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Weekly goal", style = MaterialTheme.typography.titleMedium)
+                    Text("Weekly goal", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
                     OutlinedTextField(
                         value = goalText,
@@ -253,7 +254,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Hourly rate (optional)", style = MaterialTheme.typography.titleMedium)
+                    Text("Hourly rate (optional)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
                     OutlinedTextField(
                         value = rateText,
@@ -313,7 +314,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Daily reminder", style = MaterialTheme.typography.titleMedium)
+                    Text("Daily reminder", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -363,7 +364,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("End-of-day reminder", style = MaterialTheme.typography.titleMedium)
+                    Text("End-of-day reminder", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -413,7 +414,7 @@ fun SettingsScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Notifications blocked", style = MaterialTheme.typography.titleMedium)
+                        Text("Notifications blocked", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
                             "Daily reminders will not appear while notification permission is denied. " +
                                 "Allow notifications for Work Hours Tracker so reminders can fire.",
@@ -460,7 +461,7 @@ fun SettingsScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Exact alarms", style = MaterialTheme.typography.titleMedium)
+                        Text("Exact alarms", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
                             "Reminders and week archive are more reliable with exact alarms. " +
                                 "Without them the app falls back to inexact timing.",
@@ -490,6 +491,7 @@ fun SettingsScreen(
                     Text(
                         "Color",
                         style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -557,7 +559,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Export / share", style = MaterialTheme.typography.titleMedium)
+                    Text("Export / share", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         "Share a CSV of hours via the system share sheet (same as History).",
                         style = MaterialTheme.typography.bodySmall,
@@ -650,7 +652,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Backup & restore", style = MaterialTheme.typography.titleMedium)
+                    Text("Backup & restore", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         "One JSON file for a phone swap. Includes all daily entries, week " +
                             "summaries, and settings (week start, goal, theme, font, rate, reminders). " +
@@ -715,7 +717,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Font style", style = MaterialTheme.typography.titleMedium)
+                    Text("Font style", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         "Applies app-wide (independent of the phone system font). Default matches Material.",
                         style = MaterialTheme.typography.bodySmall,
