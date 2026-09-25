@@ -73,4 +73,14 @@ interface WorkHoursDao {
             "WHERE weekStartEpochDay < :beforeEpochDay ORDER BY weekStartEpochDay ASC"
     )
     suspend fun weekStartsWithEntriesBefore(beforeEpochDay: Long): List<Long>
+
+    @Query("DELETE FROM daily_entries")
+    suspend fun deleteAllEntries()
+
+    @Query("SELECT * FROM week_logs ORDER BY weekStartEpochDay ASC")
+    suspend fun allWeekLogsOnce(): List<WeekLog>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertWeekLog(weekLog: WeekLog)
+
 }

@@ -391,7 +391,7 @@ fun EntryScreen(
             OutlinedTextField(
                 value = comments,
                 onValueChange = { comments = it },
-                label = { Text("Comments") },
+                label = { Text("Note") },
                 modifier = Modifier.fillMaxWidth().height(140.dp)
             )
 

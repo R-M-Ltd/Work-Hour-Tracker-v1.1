@@ -40,6 +40,37 @@ object CsvExporter {
         return sb.toString()
     }
 
+    /**
+     * Keeps only entries whose date is within [[startInclusive], [endInclusive]].
+     * Weeks that become empty after filtering are dropped. Null bound = unbounded.
+     */
+    fun filterByDateRange(
+        weeks: List<Pair<LocalDate, List<DailyEntry>>>,
+        startInclusive: LocalDate? = null,
+        endInclusive: LocalDate? = null
+    ): List<Pair<LocalDate, List<DailyEntry>>> {
+        if (startInclusive == null && endInclusive == null) return weeks
+        val startDay = startInclusive?.toEpochDay()
+        val endDay = endInclusive?.toEpochDay()
+        val out = ArrayList<Pair<LocalDate, List<DailyEntry>>>()
+        for ((weekStart, entries) in weeks) {
+            val filtered = entries.filter { e ->
+                val d = e.dateEpochDay
+                (startDay == null || d >= startDay) && (endDay == null || d <= endDay)
+            }
+            if (filtered.isNotEmpty()) {
+                out.add(weekStart to filtered.sortedBy { it.dateEpochDay })
+            }
+        }
+        return out
+    }
+
+    fun buildCsvForDateRange(
+        weeks: List<Pair<LocalDate, List<DailyEntry>>>,
+        startInclusive: LocalDate? = null,
+        endInclusive: LocalDate? = null
+    ): String = buildCsv(filterByDateRange(weeks, startInclusive, endInclusive))
+
     fun shareCsv(context: Context, csv: String, fileName: String = "work_hours_export.csv"): Intent {
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
         val file = File(dir, fileName)

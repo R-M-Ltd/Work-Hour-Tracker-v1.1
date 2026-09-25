@@ -15,6 +15,7 @@ import com.rmltd.workhourstracker.ui.theme.AppTheme
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.data.WeekLog
 import com.rmltd.workhourstracker.data.WorkHoursRepository
+import com.rmltd.workhourstracker.util.BackupCodec
 import com.rmltd.workhourstracker.util.WeekUtils
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -267,6 +268,76 @@ class WorkHoursViewModel(
 
     suspend fun loadExportWeeks(): List<Pair<LocalDate, List<DailyEntry>>> =
         repository.allEntriesForExport()
+
+    fun updateEntryComments(date: LocalDate, comments: String, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val ok = repository.updateEntryComments(date, comments)
+            onDone(ok)
+        }
+    }
+
+    suspend fun loadAllEntries(): List<DailyEntry> = repository.allEntriesOnce()
+
+    fun snapshotPrefsForBackup(): BackupCodec.PrefsSnapshot {
+        val (rh, rm) = ReminderPreferences.getReminderTime(appContext)
+        val (eh, em) = ReminderPreferences.getEndOfDayTime(appContext)
+        return BackupCodec.PrefsSnapshot(
+            weekStartDay = ReminderPreferences.getWeekStartDay(appContext).value,
+            weeklyGoalHours = ReminderPreferences.getWeeklyGoalHours(appContext),
+            hourlyRate = ReminderPreferences.getHourlyRate(appContext),
+            colorTheme = ThemePreferences.getColorTheme(appContext).key,
+            fontStyle = ThemePreferences.getFontStyle(appContext).key,
+            reminderEnabled = ReminderPreferences.isReminderEnabled(appContext),
+            reminderHour = rh,
+            reminderMinute = rm,
+            endOfDayEnabled = ReminderPreferences.isEndOfDayEnabled(appContext),
+            endOfDayHour = eh,
+            endOfDayMinute = em
+        )
+    }
+
+    suspend fun buildBackupJson(appVersion: String): String {
+        val prefs = snapshotPrefsForBackup()
+        val entries = repository.allEntriesOnce()
+        val weekLogs = repository.allWeekLogsOnce()
+        return BackupCodec.encode(prefs, entries, weekLogs, appVersion)
+    }
+
+    /**
+     * Validates [json], replaces all entries/week logs, applies prefs.
+     * Caller should reschedule reminders and refresh UI after success.
+     */
+    suspend fun restoreFromBackupJson(json: String): BackupCodec.BackupPayload {
+        val payload = BackupCodec.decode(json)
+        repository.replaceAllFromBackup(payload.entries, payload.weekLogs)
+        applyPrefsSnapshot(payload.prefs)
+        return payload
+    }
+
+    fun applyPrefsSnapshot(prefs: BackupCodec.PrefsSnapshot) {
+        ReminderPreferences.setWeekStartDay(
+            appContext,
+            java.time.DayOfWeek.of(prefs.weekStartDay.coerceIn(1, 7))
+        )
+        ReminderPreferences.setWeeklyGoalHours(appContext, prefs.weeklyGoalHours)
+        ReminderPreferences.setHourlyRate(appContext, prefs.hourlyRate)
+        ReminderPreferences.setReminderEnabled(appContext, prefs.reminderEnabled)
+        ReminderPreferences.setReminderTime(appContext, prefs.reminderHour, prefs.reminderMinute)
+        ReminderPreferences.setEndOfDayEnabled(appContext, prefs.endOfDayEnabled)
+        ReminderPreferences.setEndOfDayTime(appContext, prefs.endOfDayHour, prefs.endOfDayMinute)
+        ThemePreferences.setColorTheme(
+            appContext,
+            com.rmltd.workhourstracker.ui.theme.AppTheme.fromKey(prefs.colorTheme)
+        )
+        ThemePreferences.setFontStyle(
+            appContext,
+            com.rmltd.workhourstracker.ui.theme.AppFontStyle.fromKey(prefs.fontStyle)
+        )
+        _colorTheme.value = ThemePreferences.getColorTheme(appContext)
+        _fontStyle.value = ThemePreferences.getFontStyle(appContext)
+        notifyPrefsChanged(weekStartChanged = true)
+    }
+
 
     /**
      * Call after Settings changes week start or weekly goal (Compose nav does not re-resume Activity).

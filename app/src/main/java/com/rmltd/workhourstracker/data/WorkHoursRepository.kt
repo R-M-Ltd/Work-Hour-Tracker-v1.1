@@ -442,6 +442,41 @@ class WorkHoursRepository(
             .map { (start, entries) -> start to entries.sortedBy { it.dateEpochDay } }
     }
 
+
+    /** Update only the note/comments on an existing day; no-op if row missing. */
+    suspend fun updateEntryComments(date: LocalDate, comments: String): Boolean = clockMutex.withLock {
+        val existing = dao.entryForDateOnce(date.toEpochDay()) ?: return@withLock false
+        dao.upsertEntry(
+            existing.copy(
+                comments = comments,
+                updatedAtEpochMillis = System.currentTimeMillis()
+            )
+        )
+        true
+    }
+
+    suspend fun allEntriesOnce(): List<DailyEntry> = dao.allEntries()
+
+    suspend fun allWeekLogsOnce(): List<WeekLog> = dao.allWeekLogsOnce()
+
+    /**
+     * Replace all daily rows + week logs with [entries] / [weekLogs].
+     * Used by backup restore (caller applies prefs separately).
+     */
+    suspend fun replaceAllFromBackup(
+        entries: List<DailyEntry>,
+        weekLogs: List<WeekLog>
+    ) = clockMutex.withLock {
+        dao.deleteAllEntries()
+        dao.deleteAllWeekLogs()
+        for (e in entries) {
+            dao.upsertEntry(e)
+        }
+        for (w in weekLogs) {
+            dao.upsertWeekLog(w)
+        }
+    }
+
     companion object {
         /** Delegates to [ClockDayState.deriveHomeClockUi] (kept for call-site stability). */
         fun deriveHomeClockUi(todayEntry: DailyEntry?, yesterdayEntry: DailyEntry?): HomeClockUi =

@@ -3,6 +3,14 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.15] — versionCode 17
+
+Phase C — get data out / keep it safe:
+
+- **Export / share:** History share menu and Settings **Export CSV** — this week, date range, or all time via the system share sheet (FileProvider + ClipData). Reuses `CsvExporter`; range filter is unit-tested.
+- **Per-entry notes:** Entry field labeled **Note** (same `comments` column). History shows notes, **Add/Edit note** dialog without leaving History, and a simple **Search notes** filter.
+- **Backup & restore:** Settings exports/imports one JSON file (`BackupCodec`) with all daily entries, week summaries, and essential prefs (week start, goal, theme, font, rate, reminders). Confirm before overwrite; validate on import. Round-trip unit tests.
+
 ## [1.3.14] — versionCode 16
 
 Phase B — Home clarity:

@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,10 +36,15 @@ import com.rmltd.workhourstracker.data.ThemePreferences
 import com.rmltd.workhourstracker.ui.theme.AppFontStyle
 import com.rmltd.workhourstracker.ui.theme.AppTheme
 import com.rmltd.workhourstracker.ui.theme.previewPrimary
+import com.rmltd.workhourstracker.util.BackupCodec
+import com.rmltd.workhourstracker.util.BackupShare
+import com.rmltd.workhourstracker.util.CsvExporter
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.WeekUtils
-import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import com.rmltd.workhourstracker.worker.ReminderScheduler
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
@@ -76,6 +83,12 @@ fun SettingsScreen(
     var colorTheme by remember { mutableStateOf(ThemePreferences.getColorTheme(context)) }
     var fontStyle by remember { mutableStateOf(ThemePreferences.getFontStyle(context)) }
     var colorSectionExpanded by remember { mutableStateOf(true) }
+    var backupBusy by remember { mutableStateOf(false) }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
+    var showSettingsExportMenu by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val weekStart by viewModel.weekStart.collectAsState()
     var exactAlarmsAllowed by remember {
         mutableStateOf(ReminderScheduler.canScheduleExactAlarms(context))
     }
@@ -86,6 +99,14 @@ fun SettingsScreen(
         ActivityResultContracts.RequestPermission()
     ) {
         notificationsAllowed = ReminderScheduler.areNotificationsEnabled(context)
+    }
+    val restorePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            pendingRestoreUri = uri
+            showRestoreConfirm = true
+        }
     }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -534,6 +555,164 @@ fun SettingsScreen(
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Export / share", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Share a CSV of hours via the system share sheet (same as History).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Box {
+                        OutlinedButton(
+                            onClick = { showSettingsExportMenu = true },
+                            enabled = !backupBusy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Export CSV…")
+                        }
+                        DropdownMenu(
+                            expanded = showSettingsExportMenu,
+                            onDismissRequest = { showSettingsExportMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("This week") },
+                                onClick = {
+                                    showSettingsExportMenu = false
+                                    backupBusy = true
+                                    scope.launch {
+                                        try {
+                                            val weeks = viewModel.loadExportWeeks()
+                                            val end = WeekUtils.weekEndFor(weekStart)
+                                            val filtered = CsvExporter.filterByDateRange(
+                                                weeks, weekStart, end
+                                            )
+                                            val n = filtered.sumOf { it.second.size }
+                                            if (n == 0) {
+                                                Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                val intent = CsvExporter.shareCsv(
+                                                    context,
+                                                    CsvExporter.buildCsv(filtered),
+                                                    "work_hours_${weekStart}_${end}.csv"
+                                                )
+                                                context.startActivity(
+                                                    Intent.createChooser(intent, "Export work hours CSV")
+                                                )
+                                            }
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                        } finally {
+                                            backupBusy = false
+                                        }
+                                    }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("All time") },
+                                onClick = {
+                                    showSettingsExportMenu = false
+                                    backupBusy = true
+                                    scope.launch {
+                                        try {
+                                            val weeks = viewModel.loadExportWeeks()
+                                            val n = weeks.sumOf { it.second.size }
+                                            if (n == 0) {
+                                                Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                val intent = CsvExporter.shareCsv(
+                                                    context,
+                                                    CsvExporter.buildCsv(weeks)
+                                                )
+                                                context.startActivity(
+                                                    Intent.createChooser(intent, "Export work hours CSV")
+                                                )
+                                            }
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                        } finally {
+                                            backupBusy = false
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Backup & restore", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "One JSON file for a phone swap. Includes all daily entries, week " +
+                            "summaries, and settings (week start, goal, theme, font, rate, reminders). " +
+                            "Does not include notification permission or transient EOD snooze stamps. " +
+                            "Restore replaces everything on this device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(
+                        onClick = {
+                            if (backupBusy) return@Button
+                            backupBusy = true
+                            scope.launch {
+                                try {
+                                    val version = try {
+                                        context.packageManager
+                                            .getPackageInfo(context.packageName, 0)
+                                            .versionName ?: "unknown"
+                                    } catch (_: Exception) {
+                                        "unknown"
+                                    }
+                                    val json = viewModel.buildBackupJson(version)
+                                    val intent = BackupShare.shareBackup(context, json)
+                                    context.startActivity(
+                                        Intent.createChooser(intent, "Share work hours backup")
+                                    )
+                                    Toast.makeText(context, "Backup ready to share", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        "Backup failed: ${e.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } finally {
+                                    backupBusy = false
+                                }
+                            }
+                        },
+                        enabled = !backupBusy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (backupBusy) "Working…" else "Backup / share file")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            restorePicker.launch(arrayOf("application/json", "text/*", "*/*"))
+                        },
+                        enabled = !backupBusy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Restore from file…")
+                    }
+                }
+            }
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("Font style", style = MaterialTheme.typography.titleMedium)
@@ -643,6 +822,85 @@ fun SettingsScreen(
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TimePicker(state = state)
                 }
+            }
+        )
+    }
+
+    if (showRestoreConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                showRestoreConfirm = false
+                pendingRestoreUri = null
+            },
+            title = { Text("Restore backup?") },
+            text = {
+                Text(
+                    "This replaces all hours and settings on this device with the backup file. " +
+                        "This cannot be undone unless you make a backup first."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val uri = pendingRestoreUri
+                        showRestoreConfirm = false
+                        pendingRestoreUri = null
+                        if (uri == null) return@TextButton
+                        backupBusy = true
+                        scope.launch {
+                            try {
+                                val json = context.contentResolver.openInputStream(uri)?.use {
+                                    it.readBytes().toString(Charsets.UTF_8)
+                                } ?: throw IllegalStateException("Could not read file")
+                                val payload = viewModel.restoreFromBackupJson(json)
+                                ReminderScheduler.scheduleDailyReminder(context)
+                                ReminderScheduler.scheduleEndOfDayReminder(context)
+                                ReminderScheduler.scheduleWeeklyReset(context)
+                                // Refresh local Settings fields from restored prefs
+                                enabled = ReminderPreferences.isReminderEnabled(context)
+                                reminderTime = ReminderPreferences.getReminderTime(context)
+                                endOfDayEnabled = ReminderPreferences.isEndOfDayEnabled(context)
+                                endOfDayTime = ReminderPreferences.getEndOfDayTime(context)
+                                weekStartDay = ReminderPreferences.getWeekStartDay(context)
+                                goalText = "%.2f".format(
+                                    Locale.US,
+                                    ReminderPreferences.getWeeklyGoalHours(context)
+                                )
+                                val rate = ReminderPreferences.getHourlyRate(context)
+                                rateText = if (rate <= 0.0) "" else "%.2f".format(Locale.US, rate)
+                                colorTheme = ThemePreferences.getColorTheme(context)
+                                fontStyle = ThemePreferences.getFontStyle(context)
+                                Toast.makeText(
+                                    context,
+                                    "Restored ${payload.entries.size} days from backup",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } catch (e: BackupCodec.BackupValidationException) {
+                                Toast.makeText(
+                                    context,
+                                    "Invalid backup: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "Restore failed: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } finally {
+                                backupBusy = false
+                            }
+                        }
+                    }
+                ) { Text("Replace and restore") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showRestoreConfirm = false
+                        pendingRestoreUri = null
+                    }
+                ) { Text("Cancel") }
             }
         )
     }

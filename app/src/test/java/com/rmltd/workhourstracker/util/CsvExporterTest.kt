@@ -209,4 +209,45 @@ class CsvExporterTest {
         )
     }
 
+
+    @Test
+    fun filterByDateRange_keepsInclusiveBoundsAndDropsEmptyWeeks() {
+        val w1 = LocalDate.of(2026, 9, 9)
+        val w2 = LocalDate.of(2026, 9, 16)
+        val weeks = listOf(
+            w1 to listOf(
+                entry(LocalDate.of(2026, 9, 10)),
+                entry(LocalDate.of(2026, 9, 12))
+            ),
+            w2 to listOf(entry(LocalDate.of(2026, 9, 17)))
+        )
+        val filtered = CsvExporter.filterByDateRange(
+            weeks,
+            startInclusive = LocalDate.of(2026, 9, 12),
+            endInclusive = LocalDate.of(2026, 9, 17)
+        )
+        assertEquals(2, filtered.size)
+        assertEquals(listOf(LocalDate.of(2026, 9, 12).toEpochDay()), filtered[0].second.map { it.dateEpochDay })
+        assertEquals(listOf(LocalDate.of(2026, 9, 17).toEpochDay()), filtered[1].second.map { it.dateEpochDay })
+    }
+
+    @Test
+    fun buildCsvForDateRange_headerOnlyWhenNoOverlap() {
+        val weeks = listOf(
+            weekStart to listOf(entry(LocalDate.of(2026, 9, 17)))
+        )
+        val csv = CsvExporter.buildCsvForDateRange(
+            weeks,
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 1, 31)
+        )
+        assertEquals("$header\n", csv)
+    }
+
+    @Test
+    fun filterByDateRange_nullBounds_passthrough() {
+        val weeks = listOf(weekStart to listOf(entry(LocalDate.of(2026, 9, 17))))
+        assertEquals(weeks, CsvExporter.filterByDateRange(weeks, null, null))
+    }
+
 }
