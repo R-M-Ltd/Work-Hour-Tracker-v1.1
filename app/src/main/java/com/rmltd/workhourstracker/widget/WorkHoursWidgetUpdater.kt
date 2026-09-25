@@ -16,21 +16,34 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 /**
  * Builds RemoteViews from Room + prefs and pushes them to all widget instances.
  * Display-only (tap opens [MainActivity] / Home) — no clock actions from the widget.
+ *
+ * [requestUpdate] is single-flight + generation-gated: overlapping launches cannot
+ * apply a stale Room snapshot after a newer refresh has started.
  */
 object WorkHoursWidgetUpdater {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val updateMutex = Mutex()
+
+    /** Visible for JVM unit tests of generation coalescing. */
+    internal val generation = WidgetUpdateGeneration()
 
     /** Fire-and-forget refresh of every placed widget instance. */
     fun requestUpdate(context: Context) {
         val appContext = context.applicationContext
+        val token = generation.nextToken()
         scope.launch {
-            runCatching { updateAllSync(appContext) }
+            updateMutex.withLock {
+                if (!generation.isCurrent(token)) return@withLock
+                runCatching { updateAllSync(appContext) }
+            }
         }
     }
 

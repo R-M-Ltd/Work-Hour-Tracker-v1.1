@@ -3,6 +3,21 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.17] — versionCode 19
+
+Findings polish after 1.3.16 widget review:
+
+- **Widget race (M1):** `WorkHoursWidgetUpdater.requestUpdate` is single-flight + generation-gated so overlapping launches cannot apply a stale Room snapshot.
+- **Overnight widget copy (M2/C3):** Status is "Overnight open — open app to finish" (accurate; no fake tap-to-resolve).
+- **EOD catch (M3):** Fail closed — do not show "Still clocked in" when open/clocked-in state is unknown.
+- **Settings CSV date range (C1):** Settings Export CSV matches History (this week / date range / all time).
+- **Color helper (C4):** Collapsed Color section no longer says "pick a radio below".
+- **Theme vs widget (C2):** Settings note — home-screen widget stays default purple and does not follow in-app theme/font.
+- **CSV break columns (L1):** Export includes `breakDurationMinutes` and `breakPaid`.
+- **Widget locales (L2):** `HoursCalc.formatClock` uses Locale.US (same as hours/pay/CSV) for consistent widget clocks.
+- **Tests (L3/M4):** Widget overnight + non-EMPTY cases, update-generation sequencing, Entry date-scoped overnight regression.
+- **README (L4):** Version 1.3.17; brief Phases A–D feature mention.
+
 ## [1.3.16] — versionCode 18
 
 Phase D — Home screen widget (small safe first version):

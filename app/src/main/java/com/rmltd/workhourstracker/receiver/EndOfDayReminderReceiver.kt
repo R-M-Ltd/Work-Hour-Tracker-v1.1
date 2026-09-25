@@ -60,12 +60,8 @@ class EndOfDayReminderReceiver : BroadcastReceiver() {
                     ReminderScheduler.scheduleEndOfDayReminder(context)
                 }
             } catch (_: Exception) {
-                // If DB check fails and we are past cutoff, still notify once.
-                val today = LocalDate.now().toEpochDay()
-                if (ReminderPreferences.getEndOfDayFiredEpochDay(context) != today) {
-                    ReminderPreferences.markEndOfDayFired(context, today)
-                    showNotification(context)
-                }
+                // Fail closed: do not show "Still clocked in" when open state is unknown.
+                // Re-arm only; leave fired stamp alone so a later successful check can notify.
                 ReminderScheduler.scheduleEndOfDayReminder(context)
             } finally {
                 pendingResult.finish()

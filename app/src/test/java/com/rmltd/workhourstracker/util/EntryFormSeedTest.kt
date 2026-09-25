@@ -90,4 +90,32 @@ class EntryFormSeedTest {
         assertFalse(EntryFormSeed.isOutsideConfiguredWeek(106L, 100L, 106L))
         assertTrue(EntryFormSeed.isOutsideConfiguredWeek(107L, 100L, 106L))
     }
+
+    @Test
+    fun overnightAcrossWeekBoundary_dateScopedSeedWins() {
+        // Yesterday open punch is outside the new configured week; week-list alone
+        // must not invent blanks — date-scoped Room row seeds clocks for Edit yesterday.
+        val yesterdayEpoch = 99L
+        val weekStart = 100L
+        val weekEnd = 106L
+        assertTrue(EntryFormSeed.isOutsideConfiguredWeek(yesterdayEpoch, weekStart, weekEnd))
+        val scoped = EntryFormSeed.fromLoaded(
+            clockInMinutes = 22 * 60,
+            clockOutMinutes = null,
+            lunchOutMinutes = null,
+            lunchInMinutes = null,
+            comments = "left open",
+            breakDurationMinutes = null,
+            breakPaid = false
+        )
+        val seeded = EntryFormSeed.preferDateScoped(
+            targetEpochDay = yesterdayEpoch,
+            dateScopedEpochDay = yesterdayEpoch,
+            dateScopedFields = scoped
+        )
+        assertEquals(22 * 60, seeded.clockInMinutes)
+        assertEquals("left open", seeded.comments)
+        assertNull(seeded.clockOutMinutes)
+    }
+
 }

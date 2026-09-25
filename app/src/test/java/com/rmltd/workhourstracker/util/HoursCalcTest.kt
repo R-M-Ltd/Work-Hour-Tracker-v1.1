@@ -350,4 +350,18 @@ class HoursCalcTest {
             Locale.setDefault(prev)
         }
     }
+
+    @Test
+    fun formatClock_stableUnderNonUsDefaultLocale() {
+        val prev = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.GERMANY)
+            assertEquals("9:00 AM", HoursCalc.formatClock(9 * 60))
+            assertEquals("12:00 AM", HoursCalc.formatClock(0))
+            assertEquals("12:30 PM", HoursCalc.formatClock(12 * 60 + 30))
+        } finally {
+            Locale.setDefault(prev)
+        }
+    }
+
 }

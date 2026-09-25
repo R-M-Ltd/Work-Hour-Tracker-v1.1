@@ -1,6 +1,7 @@
 package com.rmltd.workhourstracker.widget
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,7 +67,7 @@ class WidgetContentTest {
     }
 
     @Test
-    fun overnight_emptyToday_promptsResolve() {
+    fun overnight_emptyToday_promptsOpenApp() {
         val d = WidgetContent.build(
             todayIn = null,
             todayOut = null,
@@ -75,6 +76,50 @@ class WidgetContentTest {
             weekHours = 20.0,
             weekGoalHours = 40.0
         )
-        assertEquals("Overnight open — tap to resolve", d.statusLine)
+        assertEquals(WidgetContent.OVERNIGHT_OPEN_STATUS, d.statusLine)
+        assertFalse(d.statusLine.contains("tap to resolve"))
+        assertTrue(d.statusLine.contains("open app"))
+    }
+
+    @Test
+    fun overnight_plusOpenToday_showsClockedInNotOvernightCopy() {
+        val d = WidgetContent.build(
+            todayIn = nineAm,
+            todayOut = null,
+            todayHoursWorked = 0.0,
+            overnightPending = true,
+            weekHours = 20.0,
+            weekGoalHours = 40.0
+        )
+        assertTrue(d.statusLine.startsWith("Clocked in since"))
+        assertFalse(d.statusLine.contains("Overnight"))
+    }
+
+    @Test
+    fun overnight_plusClosedToday_showsCompleted() {
+        val d = WidgetContent.build(
+            todayIn = nineAm,
+            todayOut = fivePm,
+            todayHoursWorked = 8.0,
+            overnightPending = true,
+            weekHours = 28.0,
+            weekGoalHours = 40.0
+        )
+        assertTrue(d.statusLine.startsWith("Completed"))
+        assertFalse(d.statusLine.contains("Overnight"))
+    }
+
+    @Test
+    fun clockAndWeek_useUsLocaleStyle() {
+        val d = WidgetContent.build(
+            todayIn = 0,
+            todayOut = null,
+            todayHoursWorked = 0.0,
+            overnightPending = false,
+            weekHours = 1.5,
+            weekGoalHours = 40.0
+        )
+        assertTrue(d.statusLine.contains("12:00 AM"))
+        assertEquals("Week 1.50h / 40.00h", d.weekLine)
     }
 }

@@ -4,9 +4,12 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.10 (versionCode 12)
+**Version:** 1.3.17 (versionCode 19)
 
 See [CHANGELOG.md](CHANGELOG.md) for shipped 1.3.x notes.
+
+**Phases A–D (1.3.13–1.3.16+):** unpaid/paid breaks, end-of-day clock-out reminder, Home week strip + optional pay estimate, History/Settings CSV (incl. date range) + JSON backup/restore, and a display-only home-screen widget (status + week hours; default purple palette).
+
 
 ## What it does
 - Work week start day is **configurable** in Settings (Sunday–Saturday). **Default remains Wednesday** (Wed → Tue).
@@ -127,7 +130,7 @@ app/src/main/java/com/rmltd/workhourstracker/
 - **CSV export** writes to app cache via `FileProvider` and opens the system
   share sheet (`Intent.clipData` + `FLAG_GRANT_READ_URI_PERMISSION` so more OEMs
   can read the URI). Columns: week_start, date, clock_in, clock_out, lunch_out,
-  lunch_in, hours, comments. Clock and hours columns use `Locale.US` for stable
+  lunch_in, breakDurationMinutes, breakPaid, hours, comments. Clock and hours columns use `Locale.US` for stable
   machine-readable output. `week_start` is recomputed from the configured
   week-start day for every daily row. `buildCsv` is pure JVM (unit-tested);
   only `shareCsv` needs Android `Context`.
@@ -145,6 +148,6 @@ app/src/main/java/com/rmltd/workhourstracker/
 - No cloud backup/sync — purely local storage, per the "no further
   integration" requirement. A sync layer could be added later behind the same
   `WorkHoursRepository` interface without touching the UI.
-- Theme follows the system (no in-app theme picker).
+- In-app color theme and font style; home-screen widget stays default purple.
 - Daily reminder does not skip solely because yesterday has an open overnight
   punch (product choice; still notifies if today is open with no out).

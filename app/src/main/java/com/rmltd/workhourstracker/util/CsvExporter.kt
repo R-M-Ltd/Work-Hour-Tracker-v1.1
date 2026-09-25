@@ -22,7 +22,10 @@ object CsvExporter {
 
     fun buildCsv(weeks: List<Pair<LocalDate, List<DailyEntry>>>): String {
         val sb = StringBuilder()
-        sb.appendLine("week_start,date,clock_in,clock_out,lunch_out,lunch_in,hours,comments")
+        sb.appendLine(
+            "week_start,date,clock_in,clock_out,lunch_out,lunch_in," +
+                "breakDurationMinutes,breakPaid,hours,comments"
+        )
         for ((weekStart, entries) in weeks) {
             val weekStartStr = weekStart.format(dateFmt)
             for (entry in entries.sortedBy { it.dateEpochDay }) {
@@ -32,6 +35,8 @@ object CsvExporter {
                 sb.append(csvClock(entry.clockOutMinutes)).append(',')
                 sb.append(csvClock(entry.lunchOutMinutes)).append(',')
                 sb.append(csvClock(entry.lunchInMinutes)).append(',')
+                sb.append(entry.breakDurationMinutes?.toString().orEmpty()).append(',')
+                sb.append(if (entry.breakPaid) "true" else "false").append(',')
                 sb.append("%.2f".format(java.util.Locale.US, entry.hoursWorked)).append(',')
                 sb.append(csvEscape(entry.comments))
                 sb.appendLine()

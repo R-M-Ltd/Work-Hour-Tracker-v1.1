@@ -134,9 +134,10 @@ object HoursCalc {
             (equalOutMeansFullDay && clockOutMinutes == clockInMinutes)
     }
 
+    /** Wall-clock label; Locale.US so widget / UI / CSV stay consistent with [formatHours]. */
     fun formatClock(minutesFromMidnight: Int): String {
         val time = LocalTime.of(minutesFromMidnight / 60, minutesFromMidnight % 60)
-        return time.format(DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
+        return time.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))
     }
 
     fun formatHours(hours: Double): String = "%.2fh".format(Locale.US, hours)

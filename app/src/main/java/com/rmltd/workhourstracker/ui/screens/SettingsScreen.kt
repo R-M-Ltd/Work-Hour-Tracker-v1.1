@@ -88,6 +88,7 @@ fun SettingsScreen(
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showSettingsExportMenu by remember { mutableStateOf(false) }
+    var showSettingsRangeExport by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val weekStart by viewModel.weekStart.collectAsState()
     var exactAlarmsAllowed by remember {
@@ -500,7 +501,16 @@ fun SettingsScreen(
                             }
                     )
                     Text(
-                        "Light/dark still follows the system setting. Tap Color to show or hide palettes, or pick a radio below.",
+                        if (colorSectionExpanded) {
+                            "Light/dark still follows the system setting. Pick a radio below, or tap Color to hide palettes."
+                        } else {
+                            "Light/dark still follows the system setting. Tap Color to expand and choose a palette."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Home-screen widget uses the default purple palette and does not follow in-app theme or font.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -608,6 +618,13 @@ fun SettingsScreen(
                                             backupBusy = false
                                         }
                                     }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Date range…") },
+                                onClick = {
+                                    showSettingsExportMenu = false
+                                    showSettingsRangeExport = true
                                 }
                             )
                             DropdownMenuItem(
@@ -823,6 +840,58 @@ fun SettingsScreen(
             text = {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TimePicker(state = state)
+                }
+            }
+        )
+    }
+
+    if (showSettingsRangeExport) {
+        ExportRangeDialog(
+            initialStart = weekStart,
+            initialEnd = WeekUtils.weekEndFor(weekStart),
+            onDismiss = { showSettingsRangeExport = false },
+            onConfirm = { start, end ->
+                showSettingsRangeExport = false
+                if (end.isBefore(start)) {
+                    Toast.makeText(context, "End date must be on or after start", Toast.LENGTH_SHORT).show()
+                } else if (!backupBusy) {
+                    backupBusy = true
+                    scope.launch {
+                        try {
+                            val weeks = viewModel.loadExportWeeks()
+                            val filtered = CsvExporter.filterByDateRange(weeks, start, end)
+                            val n = filtered.sumOf { it.second.size }
+                            if (n == 0) {
+                                Toast.makeText(
+                                    context,
+                                    "Nothing to export for $start → $end",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                val intent = CsvExporter.shareCsv(
+                                    context,
+                                    CsvExporter.buildCsv(filtered),
+                                    "work_hours_${start}_${end}.csv"
+                                )
+                                context.startActivity(
+                                    Intent.createChooser(intent, "Export work hours CSV")
+                                )
+                                Toast.makeText(
+                                    context,
+                                    "Exported $start → $end ($n days)",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(
+                                context,
+                                "Export failed: ${e.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } finally {
+                            backupBusy = false
+                        }
+                    }
                 }
             }
         )

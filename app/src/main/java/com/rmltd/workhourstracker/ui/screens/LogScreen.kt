@@ -345,7 +345,7 @@ fun LogScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ExportRangeDialog(
+fun ExportRangeDialog(
     initialStart: LocalDate,
     initialEnd: LocalDate,
     onDismiss: () -> Unit,
