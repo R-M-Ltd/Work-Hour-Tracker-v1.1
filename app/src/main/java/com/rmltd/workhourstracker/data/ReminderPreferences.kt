@@ -3,10 +3,12 @@ package com.rmltd.workhourstracker.data
 import android.content.Context
 import android.content.SharedPreferences
 import java.time.DayOfWeek
+import java.time.LocalDate
 
 /**
  * Persistent storage for reminder, week-start, and weekly-goal preferences.
- * Defaults: reminder 6:00 PM enabled; week starts Wednesday; goal 40.00 hours.
+ * Defaults: reminder 6:00 PM enabled; week starts Wednesday; goal 40.00 hours;
+ * end-of-day cutoff 8:00 PM enabled (fires only while still clocked in).
  */
 object ReminderPreferences {
 
@@ -16,6 +18,11 @@ object ReminderPreferences {
     private const val KEY_ENABLED = "reminder_enabled"
     private const val KEY_WEEK_START = "week_start_day"
     private const val KEY_WEEKLY_GOAL = "weekly_goal_hours"
+    private const val KEY_EOD_HOUR = "end_of_day_hour"
+    private const val KEY_EOD_MINUTE = "end_of_day_minute"
+    private const val KEY_EOD_ENABLED = "end_of_day_enabled"
+    private const val KEY_EOD_FIRED_EPOCH = "end_of_day_fired_epoch_day"
+    private const val KEY_EOD_SNOOZE_UNTIL = "end_of_day_snooze_until_millis"
 
     private const val DEFAULT_HOUR = 18
     private const val DEFAULT_MINUTE = 0
@@ -23,6 +30,9 @@ object ReminderPreferences {
     /** java.time DayOfWeek value: Wednesday = 3 */
     private const val DEFAULT_WEEK_START = 3
     private const val DEFAULT_WEEKLY_GOAL = 40.0
+    private const val DEFAULT_EOD_HOUR = 20
+    private const val DEFAULT_EOD_MINUTE = 0
+    private const val DEFAULT_EOD_ENABLED = true
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -67,5 +77,50 @@ object ReminderPreferences {
         prefs(context).edit()
             .putString(KEY_WEEKLY_GOAL, "%.2f".format(java.util.Locale.US, safe))
             .apply()
+    }
+
+    // --- End-of-day (still clocked in) reminder ---
+
+    fun getEndOfDayTime(context: Context): Pair<Int, Int> {
+        val p = prefs(context)
+        return p.getInt(KEY_EOD_HOUR, DEFAULT_EOD_HOUR) to
+            p.getInt(KEY_EOD_MINUTE, DEFAULT_EOD_MINUTE)
+    }
+
+    fun setEndOfDayTime(context: Context, hour: Int, minute: Int) {
+        prefs(context).edit()
+            .putInt(KEY_EOD_HOUR, hour.coerceIn(0, 23))
+            .putInt(KEY_EOD_MINUTE, minute.coerceIn(0, 59))
+            .apply()
+    }
+
+    fun isEndOfDayEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EOD_ENABLED, DEFAULT_EOD_ENABLED)
+
+    fun setEndOfDayEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_EOD_ENABLED, enabled).apply()
+    }
+
+    /** Epoch day of last end-of-day notification (one per calendar day unless snoozed). */
+    fun getEndOfDayFiredEpochDay(context: Context): Long =
+        prefs(context).getLong(KEY_EOD_FIRED_EPOCH, Long.MIN_VALUE)
+
+    fun markEndOfDayFired(context: Context, epochDay: Long = LocalDate.now().toEpochDay()) {
+        prefs(context).edit().putLong(KEY_EOD_FIRED_EPOCH, epochDay).apply()
+    }
+
+    fun clearEndOfDayFired(context: Context) {
+        prefs(context).edit().remove(KEY_EOD_FIRED_EPOCH).apply()
+    }
+
+    fun getEndOfDaySnoozeUntilMillis(context: Context): Long =
+        prefs(context).getLong(KEY_EOD_SNOOZE_UNTIL, 0L)
+
+    fun setEndOfDaySnoozeUntilMillis(context: Context, untilMillis: Long) {
+        prefs(context).edit().putLong(KEY_EOD_SNOOZE_UNTIL, untilMillis).apply()
+    }
+
+    fun clearEndOfDaySnooze(context: Context) {
+        prefs(context).edit().remove(KEY_EOD_SNOOZE_UNTIL).apply()
     }
 }

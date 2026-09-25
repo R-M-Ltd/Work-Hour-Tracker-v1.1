@@ -3,6 +3,14 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.13] — versionCode 15
+
+Phase A — daily reliability:
+
+- **Forgot punch:** History day rows are tappable to edit clock times; **Add missed punch** (+ / button) opens a date picker into Entry. Home **Forgot to clock out…** closes an open shift at a user-chosen TimePicker time (`clockOutAt`), reusing overnight/single-flight save rules.
+- **Break / lunch:** Unpaid by default and subtracted from worked hours while keeping one shift (no full clock-out required). Entry supports duration chips (15/30/45/60) or break start/end times; optional paid-break checkbox for duration-only. Room `breakDurationMinutes` / `breakPaid` (DB v4). Timed break pair wins over duration. Unit tests cover break subtraction.
+- **End-of-day reminder:** Settings enable + cutoff time (default 8:00 PM). If still clocked in past cutoff, one notification with **Clock out** / **Extend 1h** actions. Re-armed on boot/update; respects notification permission UX from 1.3.10+.
+
 ## [1.3.12] — versionCode 14
 
 - Home: clear **History** entry points (top-bar History icon + bottom History button) navigate to the existing History (`LogScreen`) on a separate screen.

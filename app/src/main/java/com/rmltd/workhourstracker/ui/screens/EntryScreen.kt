@@ -57,6 +57,8 @@ fun EntryScreen(
     var clockOutMinutes by remember(date) { mutableStateOf<Int?>(null) }
     var lunchOutMinutes by remember(date) { mutableStateOf<Int?>(null) }
     var lunchInMinutes by remember(date) { mutableStateOf<Int?>(null) }
+    var breakDurationMinutes by remember(date) { mutableStateOf<Int?>(null) }
+    var breakPaid by remember(date) { mutableStateOf(false) }
     var comments by remember(date) { mutableStateOf("") }
     var entryLoadDone by remember(date) { mutableStateOf(false) }
     var pickerField by remember { mutableStateOf<ClockField?>(null) }
@@ -70,7 +72,9 @@ fun EntryScreen(
                 loaded.clockOutMinutes,
                 loaded.lunchOutMinutes,
                 loaded.lunchInMinutes,
-                loaded.comments
+                loaded.comments,
+                loaded.breakDurationMinutes,
+                loaded.breakPaid
             )
         } else {
             EntryFormSeed.empty()
@@ -79,6 +83,8 @@ fun EntryScreen(
         clockOutMinutes = seed.clockOutMinutes
         lunchOutMinutes = seed.lunchOutMinutes
         lunchInMinutes = seed.lunchInMinutes
+        breakDurationMinutes = seed.breakDurationMinutes
+        breakPaid = seed.breakPaid
         comments = seed.comments
         entryLoadDone = true
     }
@@ -88,9 +94,19 @@ fun EntryScreen(
     var showBlockedOvernight by remember { mutableStateOf(false) }
     var openOvernightDate by remember { mutableStateOf<LocalDate?>(null) }
 
-    val worked = remember(clockInMinutes, clockOutMinutes, lunchOutMinutes, lunchInMinutes) {
+    val worked = remember(
+        clockInMinutes, clockOutMinutes, lunchOutMinutes, lunchInMinutes,
+        breakDurationMinutes, breakPaid
+    ) {
         if (clockInMinutes != null && clockOutMinutes != null && clockInMinutes != clockOutMinutes) {
-            HoursCalc.worked(clockInMinutes!!, clockOutMinutes!!, lunchOutMinutes, lunchInMinutes)
+            HoursCalc.worked(
+                clockInMinutes!!,
+                clockOutMinutes!!,
+                lunchOutMinutes,
+                lunchInMinutes,
+                breakDurationMinutes = breakDurationMinutes,
+                breakPaid = breakPaid
+            )
         } else {
             null
         }
@@ -107,6 +123,8 @@ fun EntryScreen(
                 comments = comments,
                 lunchOutMinutes = lunchOutMinutes,
                 lunchInMinutes = lunchInMinutes,
+                breakDurationMinutes = breakDurationMinutes,
+                breakPaid = breakPaid,
                 onDone = onDone
             )
         } else {
@@ -116,7 +134,9 @@ fun EntryScreen(
                 clockOutMinutes = end,
                 comments = comments,
                 lunchOutMinutes = lunchOutMinutes,
-                lunchInMinutes = lunchInMinutes
+                lunchInMinutes = lunchInMinutes,
+                breakDurationMinutes = breakDurationMinutes,
+                breakPaid = breakPaid
             ) { result ->
                 when (result) {
                     is SaveEntryResult.Saved -> onDone()
@@ -258,19 +278,74 @@ fun EntryScreen(
                 onPick = { pickerField = ClockField.IN },
                 onSpeak = { launchVoice(VoiceMode.Field(ClockField.IN)) }
             )
+            Text(
+                "Break / lunch (optional)",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                "Unpaid by default and subtracted from worked hours. Stays one shift — you do not need a full clock-out for lunch. Pick a duration or exact times.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(15, 30, 45, 60).forEach { mins ->
+                    val selected = breakDurationMinutes == mins &&
+                        lunchOutMinutes == null && lunchInMinutes == null
+                    FilterChip(
+                        selected = selected,
+                        onClick = {
+                            breakDurationMinutes = mins
+                            lunchOutMinutes = null
+                            lunchInMinutes = null
+                        },
+                        label = { Text("${mins}m") }
+                    )
+                }
+                if (breakDurationMinutes != null || lunchOutMinutes != null || lunchInMinutes != null) {
+                    TextButton(onClick = {
+                        breakDurationMinutes = null
+                        lunchOutMinutes = null
+                        lunchInMinutes = null
+                        breakPaid = false
+                    }) { Text("Clear") }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = breakPaid,
+                    onCheckedChange = { breakPaid = it },
+                    enabled = breakDurationMinutes != null &&
+                        lunchOutMinutes == null && lunchInMinutes == null
+                )
+                Text(
+                    "Paid break (duration only — not subtracted)",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             ClockTimeRow(
-                label = "Lunch start",
+                label = "Break start",
                 minutes = lunchOutMinutes,
                 optional = true,
-                onPick = { pickerField = ClockField.LUNCH_OUT },
+                onPick = {
+                    breakDurationMinutes = null
+                    pickerField = ClockField.LUNCH_OUT
+                },
                 onClear = { lunchOutMinutes = null },
                 onSpeak = { launchVoice(VoiceMode.Field(ClockField.LUNCH_OUT)) }
             )
             ClockTimeRow(
-                label = "Lunch end",
+                label = "Break end",
                 minutes = lunchInMinutes,
                 optional = true,
-                onPick = { pickerField = ClockField.LUNCH_IN },
+                onPick = {
+                    breakDurationMinutes = null
+                    pickerField = ClockField.LUNCH_IN
+                },
                 onClear = { lunchInMinutes = null },
                 onSpeak = { launchVoice(VoiceMode.Field(ClockField.LUNCH_IN)) }
             )
@@ -290,16 +365,23 @@ fun EntryScreen(
                     )
                     Text(
                         when {
-                            worked == null -> "Set clock in and clock out. Lunch is optional."
+                            worked == null ->
+                                "Set clock in and clock out. Break/lunch is optional and unpaid by default."
                             worked.lunchApplied && worked.overnight ->
-                                "Overnight shift minus lunch. Rounded to hundredths."
+                                "Overnight shift minus break. Rounded to hundredths."
                             worked.lunchApplied ->
-                                "Clock times minus lunch. Hours are not editable."
+                                "Clock times minus break. Hours are not editable."
+                            worked.breakDurationApplied && worked.overnight ->
+                                "Overnight shift minus unpaid break duration."
+                            worked.breakDurationApplied ->
+                                "Clock times minus unpaid break duration. Hours are not editable."
+                            breakPaid && breakDurationMinutes != null ->
+                                "Paid break duration is not subtracted."
                             worked.overnight ->
-                                "Overnight shift. Lunch left blank, so it was not counted."
+                                "Overnight shift. Break left blank, so it was not counted."
                             lunchOutMinutes != null || lunchInMinutes != null ->
-                                "Lunch ignored until both start and end are set, and both sit inside the shift."
-                            else -> "Calculated from clock in and clock out. Lunch left blank."
+                                "Break ignored until both start and end are set, and both sit inside the shift."
+                            else -> "Calculated from clock in and clock out. Break left blank."
                         },
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -465,8 +547,8 @@ private fun ClockTimeRow(
 
 private fun labelFor(field: ClockField): String = when (field) {
     ClockField.IN -> "Clock in"
-    ClockField.LUNCH_OUT -> "Lunch start"
-    ClockField.LUNCH_IN -> "Lunch end"
+    ClockField.LUNCH_OUT -> "Break start"
+    ClockField.LUNCH_IN -> "Break end"
     ClockField.OUT -> "Clock out"
 }
 

@@ -26,8 +26,15 @@ data class DailyEntry(
     /** Minutes from midnight, 0..1439. Null on pre-1.1 rows. */
     val clockInMinutes: Int? = null,
     val clockOutMinutes: Int? = null,
-    /** Optional lunch start (leave for lunch). Null means no lunch. */
+    /** Optional break/lunch start. Null means no timed break. */
     val lunchOutMinutes: Int? = null,
-    /** Optional lunch end (back from lunch). Null means no lunch. */
-    val lunchInMinutes: Int? = null
+    /** Optional break/lunch end. Null means no timed break. */
+    val lunchInMinutes: Int? = null,
+    /**
+     * Optional unpaid break length in minutes (Phase A). Used when the user logs
+     * a duration instead of break start/end. Timed lunch pair wins when both set.
+     */
+    val breakDurationMinutes: Int? = null,
+    /** When true, [breakDurationMinutes] is not subtracted (paid break). */
+    val breakPaid: Boolean = false
 )

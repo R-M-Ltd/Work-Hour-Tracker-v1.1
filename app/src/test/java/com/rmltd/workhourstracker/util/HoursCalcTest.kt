@@ -218,7 +218,7 @@ class HoursCalcTest {
                 HoursCalc.formatDayLabel(9 * 60, 17 * 60, null, null)
             )
             assertEquals(
-                "9:00 AM – 5:00 PM  ·  Lunch 12:00 PM – 12:30 PM",
+                "9:00 AM – 5:00 PM  ·  Break 12:00 PM – 12:30 PM",
                 HoursCalc.formatDayLabel(9 * 60, 17 * 60, 12 * 60, 12 * 60 + 30)
             )
             assertNull(HoursCalc.formatDayLabel(null, 17 * 60, 12 * 60, 12 * 60 + 30))
@@ -279,5 +279,75 @@ class HoursCalcTest {
         )
         assertEquals(24.00, ignored.hours, 0.001)
         assertFalse(ignored.lunchApplied)
+    }
+
+    @Test
+    fun unpaidBreakDuration_subtracted() {
+        // 9:00–17:00 minus 30m unpaid = 7.50h
+        val w = HoursCalc.worked(
+            9 * 60, 17 * 60,
+            breakDurationMinutes = 30,
+            breakPaid = false
+        )
+        assertEquals(7.50, w.hours, 0.001)
+        assertTrue(w.breakDurationApplied)
+        assertFalse(w.lunchApplied)
+    }
+
+    @Test
+    fun paidBreakDuration_notSubtracted() {
+        val w = HoursCalc.worked(
+            9 * 60, 17 * 60,
+            breakDurationMinutes = 30,
+            breakPaid = true
+        )
+        assertEquals(8.00, w.hours, 0.001)
+        assertFalse(w.breakDurationApplied)
+    }
+
+    @Test
+    fun lunchTimes_winOverBreakDuration() {
+        // Timed lunch 30m wins over a 60m duration claim → 8.50h from 8–17
+        val w = HoursCalc.worked(
+            8 * 60, 17 * 60,
+            lunchOutMinutes = 12 * 60,
+            lunchInMinutes = 12 * 60 + 30,
+            breakDurationMinutes = 60,
+            breakPaid = false
+        )
+        assertEquals(8.50, w.hours, 0.001)
+        assertTrue(w.lunchApplied)
+        assertFalse(w.breakDurationApplied)
+    }
+
+    @Test
+    fun breakDuration_cappedAtGross() {
+        val w = HoursCalc.worked(
+            9 * 60, 10 * 60,
+            breakDurationMinutes = 120,
+            breakPaid = false
+        )
+        assertEquals(0.00, w.hours, 0.001)
+        assertTrue(w.breakDurationApplied)
+    }
+
+    @Test
+    fun lunchWindowForBreakDuration_prefersNoon() {
+        val window = HoursCalc.lunchWindowForBreakDuration(9 * 60, 17 * 60, 30)
+        assertEquals(12 * 60 to 12 * 60 + 30, window)
+    }
+
+    @Test
+    fun formatDayLabel_breakDuration() {
+        val prev = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.US)
+            assertEquals(
+                "9:00 AM – 5:00 PM  ·  Break 30m",
+                HoursCalc.formatDayLabel(9 * 60, 17 * 60, null, null, 30)
+            )
+        } finally {
+            Locale.setDefault(prev)
+        }
     }
 }

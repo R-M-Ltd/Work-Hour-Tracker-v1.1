@@ -59,7 +59,11 @@ fun AppNavHost(
         }
 
         composable(Routes.LOG) {
-            LogScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            LogScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onEditDay = { date -> navController.navigate(Routes.entry(date)) }
+            )
         }
 
         composable(Routes.SETTINGS) {

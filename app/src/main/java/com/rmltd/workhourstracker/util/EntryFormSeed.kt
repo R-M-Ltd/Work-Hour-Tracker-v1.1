@@ -12,7 +12,9 @@ object EntryFormSeed {
         val clockOutMinutes: Int?,
         val lunchOutMinutes: Int?,
         val lunchInMinutes: Int?,
-        val comments: String
+        val comments: String,
+        val breakDurationMinutes: Int? = null,
+        val breakPaid: Boolean = false
     )
 
     fun empty(): Fields = Fields(
@@ -20,7 +22,9 @@ object EntryFormSeed {
         clockOutMinutes = null,
         lunchOutMinutes = null,
         lunchInMinutes = null,
-        comments = ""
+        comments = "",
+        breakDurationMinutes = null,
+        breakPaid = false
     )
 
     fun fromLoaded(
@@ -28,13 +32,17 @@ object EntryFormSeed {
         clockOutMinutes: Int?,
         lunchOutMinutes: Int?,
         lunchInMinutes: Int?,
-        comments: String?
+        comments: String?,
+        breakDurationMinutes: Int? = null,
+        breakPaid: Boolean = false
     ): Fields = Fields(
         clockInMinutes = clockInMinutes,
         clockOutMinutes = clockOutMinutes,
         lunchOutMinutes = lunchOutMinutes,
         lunchInMinutes = lunchInMinutes,
-        comments = comments.orEmpty()
+        comments = comments.orEmpty(),
+        breakDurationMinutes = breakDurationMinutes,
+        breakPaid = breakPaid
     )
 
     /**

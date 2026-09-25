@@ -25,6 +25,7 @@ class WorkHoursApplication : Application() {
         super.onCreate()
         // Idempotent: re-scheduling just replaces the existing pending alarm.
         ReminderScheduler.scheduleDailyReminder(this)
+        ReminderScheduler.scheduleEndOfDayReminder(this)
         ReminderScheduler.scheduleWeeklyReset(this)
         // Catch up archives if week-start 2 AM was missed while the device was off.
         appScope.launch {

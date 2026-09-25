@@ -16,6 +16,8 @@ class EntryFormSeedTest {
         assertNull(e.lunchOutMinutes)
         assertNull(e.lunchInMinutes)
         assertEquals("", e.comments)
+        assertNull(e.breakDurationMinutes)
+        assertFalse(e.breakPaid)
     }
 
     @Test
@@ -32,6 +34,23 @@ class EntryFormSeedTest {
         assertEquals(12 * 60, f.lunchOutMinutes)
         assertEquals(12 * 60 + 30, f.lunchInMinutes)
         assertEquals("warehouse", f.comments)
+        assertNull(f.breakDurationMinutes)
+        assertFalse(f.breakPaid)
+    }
+
+    @Test
+    fun fromLoaded_mapsBreakDurationAndPaid() {
+        val f = EntryFormSeed.fromLoaded(
+            clockInMinutes = 9 * 60,
+            clockOutMinutes = 17 * 60,
+            lunchOutMinutes = null,
+            lunchInMinutes = null,
+            comments = null,
+            breakDurationMinutes = 30,
+            breakPaid = true
+        )
+        assertEquals(30, f.breakDurationMinutes)
+        assertTrue(f.breakPaid)
     }
 
     @Test

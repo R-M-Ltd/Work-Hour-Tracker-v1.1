@@ -72,6 +72,14 @@ class WorkHoursRepository(
     suspend fun entryForDateOnce(date: LocalDate): DailyEntry? =
         dao.entryForDateOnce(date.toEpochDay())
 
+    /** True when today is open or yesterday still has an overnight open punch. */
+    suspend fun isStillClockedIn(today: LocalDate = LocalDate.now()): Boolean {
+        val todayEntry = dao.entryForDateOnce(today.toEpochDay())
+        if (todayEntry?.clockInMinutes != null && todayEntry.clockOutMinutes == null) return true
+        val yesterday = dao.entryForDateOnce(today.minusDays(1).toEpochDay())
+        return yesterday?.clockInMinutes != null && yesterday.clockOutMinutes == null
+    }
+
     /** Date-scoped Flow — used when Entry navigates outside the configured current week. */
     fun entryForDate(date: LocalDate): Flow<DailyEntry?> =
         dao.entryForDate(date.toEpochDay())
@@ -97,7 +105,9 @@ class WorkHoursRepository(
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
         forceAfterDiscard: Boolean = false,
-        equalOutMeansFullDay: Boolean = false
+        equalOutMeansFullDay: Boolean = false,
+        breakDurationMinutes: Int? = null,
+        breakPaid: Boolean = false
     ): SaveEntryResult = clockMutex.withLock {
         if (!forceAfterDiscard) {
             val open = dao.findOpenEntry()
@@ -114,8 +124,11 @@ class WorkHoursRepository(
             comments,
             lunchOutMinutes,
             lunchInMinutes,
-            equalOutMeansFullDay
+            equalOutMeansFullDay,
+            breakDurationMinutes,
+            breakPaid
         )
+        refreshWeekArchiveIfPresent(date)
         SaveEntryResult.Saved
     }
 
@@ -127,17 +140,24 @@ class WorkHoursRepository(
         comments: String,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
-        equalOutMeansFullDay: Boolean = false
+        equalOutMeansFullDay: Boolean = false,
+        breakDurationMinutes: Int? = null,
+        breakPaid: Boolean = false
     ) {
         val weekStart = WeekUtils.weekStartFor(date, startDay())
         val lunchOut = if (lunchOutMinutes != null && lunchInMinutes != null) lunchOutMinutes else null
         val lunchIn = if (lunchOutMinutes != null && lunchInMinutes != null) lunchInMinutes else null
+        // Timed break wins; otherwise persist duration (unpaid by default).
+        val duration = if (lunchOut != null) null else breakDurationMinutes?.takeIf { it > 0 }
+        val paid = if (duration != null) breakPaid else false
         val hours = HoursCalc.hoursWorked(
             clockInMinutes,
             clockOutMinutes,
             lunchOut,
             lunchIn,
-            equalOutMeansFullDay = equalOutMeansFullDay
+            equalOutMeansFullDay = equalOutMeansFullDay,
+            breakDurationMinutes = duration,
+            breakPaid = paid
         )
         dao.upsertEntry(
             DailyEntry(
@@ -148,9 +168,19 @@ class WorkHoursRepository(
                 clockInMinutes = clockInMinutes,
                 clockOutMinutes = clockOutMinutes,
                 lunchOutMinutes = lunchOut,
-                lunchInMinutes = lunchIn
+                lunchInMinutes = lunchIn,
+                breakDurationMinutes = duration,
+                breakPaid = paid
             )
         )
+    }
+
+    /** Keep History week totals accurate after editing an already-archived day. */
+    private suspend fun refreshWeekArchiveIfPresent(date: LocalDate) {
+        val weekStart = WeekUtils.weekStartFor(date, startDay())
+        if (dao.weekLogExists(weekStart.toEpochDay())) {
+            upsertWeekArchive(weekStart)
+        }
     }
 
     /**
@@ -189,7 +219,9 @@ class WorkHoursRepository(
         clockOutMinutes: Int,
         comments: String,
         lunchOutMinutes: Int? = null,
-        lunchInMinutes: Int? = null
+        lunchInMinutes: Int? = null,
+        breakDurationMinutes: Int? = null,
+        breakPaid: Boolean = false
     ): SaveEntryResult = clockMutex.withLock {
         val open = dao.findOpenEntry()
         if (open != null && open.dateEpochDay != date.toEpochDay()) {
@@ -201,8 +233,11 @@ class WorkHoursRepository(
             clockOutMinutes,
             comments,
             lunchOutMinutes,
-            lunchInMinutes
+            lunchInMinutes,
+            breakDurationMinutes = breakDurationMinutes,
+            breakPaid = breakPaid
         )
+        refreshWeekArchiveIfPresent(date)
         SaveEntryResult.Saved
     }
 
@@ -240,7 +275,9 @@ class WorkHoursRepository(
                 clockInMinutes = minutes,
                 clockOutMinutes = null,
                 lunchOutMinutes = existing?.lunchOutMinutes,
-                lunchInMinutes = existing?.lunchInMinutes
+                lunchInMinutes = existing?.lunchInMinutes,
+                breakDurationMinutes = existing?.breakDurationMinutes,
+                breakPaid = existing?.breakPaid ?: false
             )
         )
         return ClockInResult.STARTED
@@ -280,8 +317,11 @@ class WorkHoursRepository(
                     clockOutMinutes = minutes,
                     comments = today!!.comments,
                     lunchOutMinutes = today.lunchOutMinutes,
-                    lunchInMinutes = today.lunchInMinutes
+                    lunchInMinutes = today.lunchInMinutes,
+                    breakDurationMinutes = today.breakDurationMinutes,
+                    breakPaid = today.breakPaid
                 )
+                refreshWeekArchiveIfPresent(date)
             }
             ClockOutResult.SUCCESS_OVERNIGHT -> {
                 // priorIn non-null by decideClockOut contract; equal wall → 24.00h
@@ -292,8 +332,11 @@ class WorkHoursRepository(
                     comments = prior!!.comments,
                     lunchOutMinutes = prior.lunchOutMinutes,
                     lunchInMinutes = prior.lunchInMinutes,
-                    equalOutMeansFullDay = priorIn == minutes
+                    equalOutMeansFullDay = priorIn == minutes,
+                    breakDurationMinutes = prior.breakDurationMinutes,
+                    breakPaid = prior.breakPaid
                 )
+                refreshWeekArchiveIfPresent(yesterday)
             }
         }
         decision

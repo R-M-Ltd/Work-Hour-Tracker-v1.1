@@ -15,6 +15,7 @@ class BootReceiver : BroadcastReceiver() {
             action == Intent.ACTION_MY_PACKAGE_REPLACED
         ) {
             ReminderScheduler.scheduleDailyReminder(context)
+            ReminderScheduler.scheduleEndOfDayReminder(context)
             ReminderScheduler.scheduleWeeklyReset(context)
             // Catch up any week archives missed while the device was powered off
             // (or alarms cleared by an app update).

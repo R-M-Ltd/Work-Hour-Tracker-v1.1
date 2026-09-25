@@ -114,6 +114,8 @@ class WorkHoursViewModel(
         comments: String,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
+        breakDurationMinutes: Int? = null,
+        breakPaid: Boolean = false,
         onResult: (SaveEntryResult) -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -121,7 +123,14 @@ class WorkHoursViewModel(
                 _clockOpInProgress.value = true
                 try {
                     val result = repository.saveEntry(
-                        date, clockInMinutes, clockOutMinutes, comments, lunchOutMinutes, lunchInMinutes
+                        date,
+                        clockInMinutes,
+                        clockOutMinutes,
+                        comments,
+                        lunchOutMinutes,
+                        lunchInMinutes,
+                        breakDurationMinutes = breakDurationMinutes,
+                        breakPaid = breakPaid
                     )
                     onResult(result)
                 } finally {
@@ -138,6 +147,8 @@ class WorkHoursViewModel(
         comments: String,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
+        breakDurationMinutes: Int? = null,
+        breakPaid: Boolean = false,
         onDone: () -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -145,7 +156,14 @@ class WorkHoursViewModel(
                 _clockOpInProgress.value = true
                 try {
                     repository.discardOpenAndSaveEntry(
-                        date, clockInMinutes, clockOutMinutes, comments, lunchOutMinutes, lunchInMinutes
+                        date,
+                        clockInMinutes,
+                        clockOutMinutes,
+                        comments,
+                        lunchOutMinutes,
+                        lunchInMinutes,
+                        breakDurationMinutes = breakDurationMinutes,
+                        breakPaid = breakPaid
                     )
                     onDone()
                 } finally {
@@ -190,10 +208,21 @@ class WorkHoursViewModel(
      * @param onResult [ClockOutResult] — may be overnight finish of yesterday's open shift.
      */
     fun clockOutNow(date: LocalDate = LocalDate.now(), onResult: (ClockOutResult) -> Unit = {}) {
+        val now = LocalTime.now()
+        clockOutAt(date, now.hour * 60 + now.minute, onResult)
+    }
+
+    /**
+     * Clock out at a user-chosen time (forgot-to-clock-out / TimePicker).
+     * Same single-flight guards as [clockOutNow].
+     */
+    fun clockOutAt(
+        date: LocalDate = LocalDate.now(),
+        minutes: Int,
+        onResult: (ClockOutResult) -> Unit = {}
+    ) {
         if (!clockFlight.compareAndSet(false, true)) return
         _clockOpInProgress.value = true
-        val now = LocalTime.now()
-        val minutes = now.hour * 60 + now.minute
         viewModelScope.launch {
             try {
                 clockFlightMutex.withLock {

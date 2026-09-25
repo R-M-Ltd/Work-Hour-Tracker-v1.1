@@ -52,6 +52,13 @@ fun SettingsScreen(
     var enabled by remember { mutableStateOf(ReminderPreferences.isReminderEnabled(context)) }
     var reminderTime by remember { mutableStateOf(ReminderPreferences.getReminderTime(context)) }
     var showPicker by remember { mutableStateOf(false) }
+    var endOfDayEnabled by remember {
+        mutableStateOf(ReminderPreferences.isEndOfDayEnabled(context))
+    }
+    var endOfDayTime by remember {
+        mutableStateOf(ReminderPreferences.getEndOfDayTime(context))
+    }
+    var showEndOfDayPicker by remember { mutableStateOf(false) }
     var weekStartDay by remember { mutableStateOf(ReminderPreferences.getWeekStartDay(context)) }
     var weekStartExpanded by remember { mutableStateOf(false) }
     var goalText by remember {
@@ -86,6 +93,7 @@ fun SettingsScreen(
     }
 
     val weekEndDay = WeekUtils.weekEndDayName(weekStartDay)
+    val sectionShape = RoundedCornerShape(16.dp)
 
     Scaffold(
         topBar = {
@@ -107,275 +115,401 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Work week", style = MaterialTheme.typography.titleMedium)
-
-            ExposedDropdownMenuBox(
-                expanded = weekStartExpanded,
-                onExpandedChange = { weekStartExpanded = !weekStartExpanded }
-            ) {
-                OutlinedTextField(
-                    value = weekStartDay.getDisplayName(TextStyle.FULL, Locale.getDefault()),
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Week starts on") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weekStartExpanded) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = weekStartExpanded,
-                    onDismissRequest = { weekStartExpanded = false }
-                ) {
-                    DayOfWeek.entries.forEach { day ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault()))
-                            },
-                            onClick = {
-                                weekStartDay = day
-                                weekStartExpanded = false
-                                ReminderPreferences.setWeekStartDay(context, day)
-                                ReminderScheduler.scheduleWeeklyReset(context)
-                                viewModel.notifyPrefsChanged(weekStartChanged = true)
-                                Toast.makeText(
-                                    context,
-                                    "Week starts on ${day.getDisplayName(TextStyle.FULL, Locale.getDefault())}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        )
-                    }
-                }
-            }
-
-            Text(
-                "Week runs ${weekStartDay.getDisplayName(TextStyle.FULL, Locale.getDefault())} → " +
-                    "${weekEndDay.getDisplayName(TextStyle.FULL, Locale.getDefault())}. " +
-                    "Archive/reset fires at 2:00 AM on the week-start day.",
-                style = MaterialTheme.typography.bodySmall
-            )
-
-            HorizontalDivider()
-
-            Text("Weekly goal", style = MaterialTheme.typography.titleMedium)
-
-            OutlinedTextField(
-                value = goalText,
-                onValueChange = { goalText = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                label = { Text("Hours per week") },
-                supportingText = { Text("Shown as a progress ring on Home. Default 40.00.") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Button(
-                onClick = {
-                    val parsed = goalText.toDoubleOrNull()
-                    if (parsed == null || parsed <= 0.0) {
-                        Toast.makeText(context, "Enter a goal greater than 0", Toast.LENGTH_SHORT).show()
-                    } else {
-                        ReminderPreferences.setWeeklyGoalHours(context, parsed)
-                        goalText = "%.2f".format(Locale.US, ReminderPreferences.getWeeklyGoalHours(context))
-                        viewModel.notifyPrefsChanged()
-                        Toast.makeText(context, "Weekly goal saved", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Save weekly goal")
-            }
-
-            HorizontalDivider()
-
-            Text("Daily reminder", style = MaterialTheme.typography.titleMedium)
-
-            Row(
+            ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Notification")
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Work week", style = MaterialTheme.typography.titleMedium)
+
+                    ExposedDropdownMenuBox(
+                        expanded = weekStartExpanded,
+                        onExpandedChange = { weekStartExpanded = !weekStartExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = weekStartDay.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Week starts on") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weekStartExpanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = weekStartExpanded,
+                            onDismissRequest = { weekStartExpanded = false }
+                        ) {
+                            DayOfWeek.entries.forEach { day ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault()))
+                                    },
+                                    onClick = {
+                                        weekStartDay = day
+                                        weekStartExpanded = false
+                                        ReminderPreferences.setWeekStartDay(context, day)
+                                        ReminderScheduler.scheduleWeeklyReset(context)
+                                        viewModel.notifyPrefsChanged(weekStartChanged = true)
+                                        Toast.makeText(
+                                            context,
+                                            "Week starts on ${day.getDisplayName(TextStyle.FULL, Locale.getDefault())}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     Text(
-                        "Remind me once a day to log hours (skipped if today already has clock-out)",
-                        style = MaterialTheme.typography.bodySmall
+                        "Week runs ${weekStartDay.getDisplayName(TextStyle.FULL, Locale.getDefault())} → " +
+                            "${weekEndDay.getDisplayName(TextStyle.FULL, Locale.getDefault())}. " +
+                            "Archive/reset fires at 2:00 AM on the week-start day.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = { on ->
-                        enabled = on
-                        ReminderPreferences.setReminderEnabled(context, on)
-                        ReminderScheduler.scheduleDailyReminder(context)
-                        Toast.makeText(
-                            context,
-                            if (on) "Daily reminder on" else "Daily reminder off",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                )
             }
 
-            OutlinedButton(
-                onClick = { showPicker = true },
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth()
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
             ) {
-                val (hour, minute) = reminderTime
-                Text("Reminder time: ${HoursCalc.formatClock(hour * 60 + minute)}")
-            }
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Weekly goal", style = MaterialTheme.typography.titleMedium)
 
-            if (!notificationsAllowed) {
-                HorizontalDivider()
-                Text("Notifications blocked", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Daily reminders will not appear while notification permission is denied. " +
-                        "Allow notifications for Work Hours Tracker so reminders can fire.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    OutlinedButton(
+                    OutlinedTextField(
+                        value = goalText,
+                        onValueChange = { goalText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                        label = { Text("Hours per week") },
+                        supportingText = { Text("Shown as a progress ring on Home. Default 40.00.") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Button(
                         onClick = {
-                            val granted = ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.POST_NOTIFICATIONS
-                            ) == PackageManager.PERMISSION_GRANTED
-                            if (granted) {
-                                // Channel / app-level block — open system settings.
-                                ReminderScheduler.openAppNotificationSettings(context)
+                            val parsed = goalText.toDoubleOrNull()
+                            if (parsed == null || parsed <= 0.0) {
+                                Toast.makeText(context, "Enter a goal greater than 0", Toast.LENGTH_SHORT).show()
                             } else {
-                                notificationPermissionLauncher.launch(
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                )
+                                ReminderPreferences.setWeeklyGoalHours(context, parsed)
+                                goalText = "%.2f".format(Locale.US, ReminderPreferences.getWeeklyGoalHours(context))
+                                viewModel.notifyPrefsChanged()
+                                Toast.makeText(context, "Weekly goal saved", Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Allow notifications")
+                        Text("Save weekly goal")
                     }
-                }
-                OutlinedButton(
-                    onClick = { ReminderScheduler.openAppNotificationSettings(context) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Open notification settings")
                 }
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !exactAlarmsAllowed) {
-                HorizontalDivider()
-                Text("Exact alarms", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Reminders and week archive are more reliable with exact alarms. " +
-                        "Without them the app falls back to inexact timing.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                OutlinedButton(
-                    onClick = { ReminderScheduler.openExactAlarmSettings(context) },
-                    modifier = Modifier.fillMaxWidth()
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Allow exact alarms")
-                }
-            }
+                    Text("Daily reminder", style = MaterialTheme.typography.titleMedium)
 
-            HorizontalDivider()
-
-            // "Color" label is a second entry point: tap expands/collapses the same theme radios.
-            Text(
-                "Color",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        colorSectionExpanded = !colorSectionExpanded
-                    }
-            )
-            Text(
-                "Light/dark still follows the system setting. Tap Color to show or hide palettes, or pick a radio below.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (colorSectionExpanded) {
-                Spacer(Modifier.height(8.dp))
-                AppTheme.entries.forEach { option ->
-                    val selected = colorTheme == option
-                    val shape = RoundedCornerShape(12.dp)
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clip(shape)
-                            .background(
-                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-                                else Color.Transparent
-                            )
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(
-                            selected = selected,
-                            onClick = {
-                                colorTheme = option
-                                viewModel.setColorTheme(option)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Notification")
+                            Text(
+                                "Remind me once a day to log hours (skipped if today already has clock-out)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = enabled,
+                            onCheckedChange = { on ->
+                                enabled = on
+                                ReminderPreferences.setReminderEnabled(context, on)
+                                ReminderScheduler.scheduleDailyReminder(context)
                                 Toast.makeText(
                                     context,
-                                    "${option.displayName} theme",
+                                    if (on) "Daily reminder on" else "Daily reminder off",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
                         )
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(option.previewPrimary())
-                        )
-                        Text(
-                            option.displayName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 12.dp)
-                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = { showPicker = true },
+                        enabled = enabled,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val (hour, minute) = reminderTime
+                        Text("Reminder time: ${HoursCalc.formatClock(hour * 60 + minute)}")
                     }
                 }
             }
 
-            HorizontalDivider()
-
-            Text("Font style", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Applies app-wide (independent of the phone system font). Default matches Material.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(8.dp))
-            AppFontStyle.entries.forEach { option ->
-                val selected = fontStyle == option
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    RadioButton(
-                        selected = selected,
-                        onClick = {
-                            fontStyle = option
-                            viewModel.setFontStyle(option)
-                            Toast.makeText(
-                                context,
-                                "${option.displayName} font",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                    Text("End-of-day reminder", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Still clocked in")
+                            Text(
+                                "One notification if you are still clocked in past this time. " +
+                                    "Actions: clock out or extend 1 hour.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
+                        Switch(
+                            checked = endOfDayEnabled,
+                            onCheckedChange = { on ->
+                                endOfDayEnabled = on
+                                ReminderPreferences.setEndOfDayEnabled(context, on)
+                                ReminderScheduler.scheduleEndOfDayReminder(context)
+                                Toast.makeText(
+                                    context,
+                                    if (on) "End-of-day reminder on" else "End-of-day reminder off",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { showEndOfDayPicker = true },
+                        enabled = endOfDayEnabled,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val (hour, minute) = endOfDayTime
+                        Text("Cutoff time: ${HoursCalc.formatClock(hour * 60 + minute)}")
+                    }
+                }
+            }
+
+            if (!notificationsAllowed) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = sectionShape,
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("Notifications blocked", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Daily reminders will not appear while notification permission is denied. " +
+                                "Allow notifications for Work Hours Tracker so reminders can fire.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            OutlinedButton(
+                                onClick = {
+                                    val granted = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (granted) {
+                                        ReminderScheduler.openAppNotificationSettings(context)
+                                    } else {
+                                        notificationPermissionLauncher.launch(
+                                            Manifest.permission.POST_NOTIFICATIONS
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Allow notifications")
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { ReminderScheduler.openAppNotificationSettings(context) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Open notification settings")
+                        }
+                    }
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !exactAlarmsAllowed) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = sectionShape,
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("Exact alarms", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Reminders and week archive are more reliable with exact alarms. " +
+                                "Without them the app falls back to inexact timing.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedButton(
+                            onClick = { ReminderScheduler.openExactAlarmSettings(context) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Allow exact alarms")
+                        }
+                    }
+                }
+            }
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // "Color" label is a second entry point: tap expands/collapses the same theme radios.
+                    Text(
+                        "Color",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                colorSectionExpanded = !colorSectionExpanded
+                            }
                     )
                     Text(
-                        option.displayName,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(start = 8.dp)
+                        "Light/dark still follows the system setting. Tap Color to show or hide palettes, or pick a radio below.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (colorSectionExpanded) {
+                        Spacer(Modifier.height(4.dp))
+                        AppTheme.entries.forEach { option ->
+                            val selected = colorTheme == option
+                            val shape = RoundedCornerShape(12.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clip(shape)
+                                    .background(
+                                        if (selected) MaterialTheme.colorScheme.primaryContainer
+                                        else Color.Transparent
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = {
+                                        colorTheme = option
+                                        viewModel.setColorTheme(option)
+                                        Toast.makeText(
+                                            context,
+                                            "${option.displayName} theme",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(option.previewPrimary())
+                                )
+                                Text(
+                                    option.displayName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.padding(start = 12.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Font style", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Applies app-wide (independent of the phone system font). Default matches Material.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    AppFontStyle.entries.forEach { option ->
+                        val selected = fontStyle == option
+                        val shape = RoundedCornerShape(12.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                                .clip(shape)
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.secondaryContainer
+                                    else Color.Transparent
+                                )
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selected,
+                                onClick = {
+                                    fontStyle = option
+                                    viewModel.setFontStyle(option)
+                                    Toast.makeText(
+                                        context,
+                                        "${option.displayName} font",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            )
+                            Text(
+                                option.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -405,6 +539,39 @@ fun SettingsScreen(
                 TextButton(onClick = { showPicker = false }) { Text("Cancel") }
             },
             title = { Text("Reminder time") },
+            text = {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    TimePicker(state = state)
+                }
+            }
+        )
+    }
+
+    if (showEndOfDayPicker) {
+        val (hour, minute) = endOfDayTime
+        val state = rememberTimePickerState(
+            initialHour = hour,
+            initialMinute = minute,
+            is24Hour = false
+        )
+        AlertDialog(
+            onDismissRequest = { showEndOfDayPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        ReminderPreferences.setEndOfDayTime(context, state.hour, state.minute)
+                        endOfDayTime = state.hour to state.minute
+                        ReminderPreferences.clearEndOfDayFired(context)
+                        ReminderScheduler.scheduleEndOfDayReminder(context)
+                        showEndOfDayPicker = false
+                        Toast.makeText(context, "End-of-day cutoff updated", Toast.LENGTH_SHORT).show()
+                    }
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndOfDayPicker = false }) { Text("Cancel") }
+            },
+            title = { Text("End-of-day cutoff") },
             text = {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TimePicker(state = state)

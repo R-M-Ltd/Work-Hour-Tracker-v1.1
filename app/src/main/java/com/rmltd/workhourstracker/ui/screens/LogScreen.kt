@@ -2,10 +2,13 @@ package com.rmltd.workhourstracker.ui.screens
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -26,12 +29,17 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LogScreen(viewModel: WorkHoursViewModel, onBack: () -> Unit) {
+fun LogScreen(
+    viewModel: WorkHoursViewModel,
+    onBack: () -> Unit,
+    onEditDay: (LocalDate) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val weekLogs by viewModel.weekLogs.collectAsState()
     val allTimeTotal by viewModel.allTimeTotal.collectAsState()
     var exporting by remember { mutableStateOf(false) }
+    var showAddMissed by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -43,6 +51,9 @@ fun LogScreen(viewModel: WorkHoursViewModel, onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showAddMissed = true }) {
+                        Icon(Icons.Filled.Add, contentDescription = "Add missed punch")
+                    }
                     IconButton(
                         onClick = {
                             if (exporting) return@IconButton
@@ -89,89 +100,170 @@ fun LogScreen(viewModel: WorkHoursViewModel, onBack: () -> Unit) {
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Total hours to date", style = MaterialTheme.typography.titleMedium)
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    Text(
+                        "Total hours to date",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                     Text(
                         formatHours(allTimeTotal),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
                         "Sum of all logged days (including this week). " +
                             "Archived weeks with hours are listed below; empty weeks are hidden. " +
-                            "This week's running total is also on the Home screen.",
-                        style = MaterialTheme.typography.bodySmall
+                            "Tap a day to edit times or add a missed punch (+).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                     )
                 }
             }
+
+            OutlinedButton(
+                onClick = { showAddMissed = true },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Add missed punch")
+            }
+            Spacer(Modifier.height(8.dp))
 
             if (weekLogs.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No completed weeks with hours yet.")
                 }
             } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
                     items(weekLogs) { log ->
-                        WeekLogRow(log = log, viewModel = viewModel)
-                        HorizontalDivider()
+                        WeekLogRow(
+                            log = log,
+                            viewModel = viewModel,
+                            onEditDay = onEditDay
+                        )
                     }
                 }
             }
         }
     }
+
+    if (showAddMissed) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = System.currentTimeMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showAddMissed = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val millis = datePickerState.selectedDateMillis
+                        if (millis != null) {
+                            // DatePicker uses UTC millis; convert via epoch day of local midnight UTC.
+                            val epochDay = millis / (24L * 60L * 60L * 1000L)
+                            onEditDay(LocalDate.ofEpochDay(epochDay))
+                        }
+                        showAddMissed = false
+                    }
+                ) { Text("Edit day") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddMissed = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 @Composable
-private fun WeekLogRow(log: WeekLog, viewModel: WorkHoursViewModel) {
+private fun WeekLogRow(
+    log: WeekLog,
+    viewModel: WorkHoursViewModel,
+    onEditDay: (LocalDate) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     var dayEntries by remember { mutableStateOf<List<DailyEntry>>(emptyList()) }
 
     LaunchedEffect(expanded) {
-        if (expanded && dayEntries.isEmpty()) {
+        if (expanded) {
             dayEntries = viewModel.loadEntriesForWeek(LocalDate.ofEpochDay(log.weekStartEpochDay))
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "${LocalDate.ofEpochDay(log.weekStartEpochDay).format(DateTimeFormatter.ofPattern("MMM d"))} – " +
-                    LocalDate.ofEpochDay(log.weekEndEpochDay).format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(formatHours(log.totalHours))
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "${LocalDate.ofEpochDay(log.weekStartEpochDay).format(DateTimeFormatter.ofPattern("MMM d"))} – " +
+                        LocalDate.ofEpochDay(log.weekEndEpochDay).format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(formatHours(log.totalHours))
+                }
             }
-        }
 
-        if (expanded) {
-            Spacer(Modifier.height(8.dp))
-            dayEntries.forEach { entry ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(LocalDate.ofEpochDay(entry.dateEpochDay).format(DateTimeFormatter.ofPattern("EEE, MMM d")))
-                        HoursCalc.formatDayLabel(
-                            entry.clockInMinutes,
-                            entry.clockOutMinutes,
-                            entry.lunchOutMinutes,
-                            entry.lunchInMinutes
-                        )?.let { range ->
-                            Text(range, style = MaterialTheme.typography.bodySmall)
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                dayEntries.forEach { entry ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onEditDay(LocalDate.ofEpochDay(entry.dateEpochDay))
+                            }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                LocalDate.ofEpochDay(entry.dateEpochDay)
+                                    .format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+                            )
+                            HoursCalc.formatDayLabel(
+                                entry.clockInMinutes,
+                                entry.clockOutMinutes,
+                                entry.lunchOutMinutes,
+                                entry.lunchInMinutes,
+                                entry.breakDurationMinutes
+                            )?.let { range ->
+                                Text(range, style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (entry.comments.isNotBlank()) {
+                                Text(entry.comments, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(
+                                "Tap to edit times",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
-                        if (entry.comments.isNotBlank()) {
-                            Text(entry.comments, style = MaterialTheme.typography.bodySmall)
-                        }
+                        Text(formatHours(entry.hoursWorked))
                     }
-                    Text(formatHours(entry.hoursWorked))
                 }
             }
         }

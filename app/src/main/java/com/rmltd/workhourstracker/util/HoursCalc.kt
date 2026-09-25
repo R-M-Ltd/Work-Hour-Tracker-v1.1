@@ -3,6 +3,8 @@ package com.rmltd.workhourstracker.util
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.round
 
 /**
@@ -13,7 +15,10 @@ import kotlin.math.round
  * When [equalOutMeansFullDay] is true and out equals in, treat as a full 24h
  * overnight finish (Home clock-out across midnight with matching wall times).
  *
- * Lunch is optional. If either lunch time is missing, lunch did not occur.
+ * Break / lunch is optional and unpaid by default (subtracted from gross).
+ * Prefer an explicit lunch start/end pair when both are set; otherwise a
+ * [breakDurationMinutes] value is subtracted from the shift (still one shift —
+ * not a full clock-out). Paid breaks skip subtraction.
  */
 object HoursCalc {
 
@@ -22,7 +27,9 @@ object HoursCalc {
     data class Worked(
         val hours: Double,
         val lunchApplied: Boolean,
-        val overnight: Boolean
+        val overnight: Boolean,
+        /** True when unpaid break duration (not lunch times) was subtracted. */
+        val breakDurationApplied: Boolean = false
     )
 
     fun durationMinutes(clockInMinutes: Int, clockOutMinutes: Int): Int {
@@ -36,13 +43,17 @@ object HoursCalc {
         clockOutMinutes: Int,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
-        equalOutMeansFullDay: Boolean = false
+        equalOutMeansFullDay: Boolean = false,
+        breakDurationMinutes: Int? = null,
+        breakPaid: Boolean = false
     ): Double = worked(
         clockInMinutes,
         clockOutMinutes,
         lunchOutMinutes,
         lunchInMinutes,
-        equalOutMeansFullDay
+        equalOutMeansFullDay,
+        breakDurationMinutes,
+        breakPaid
     ).hours
 
     fun worked(
@@ -50,7 +61,9 @@ object HoursCalc {
         clockOutMinutes: Int,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
-        equalOutMeansFullDay: Boolean = false
+        equalOutMeansFullDay: Boolean = false,
+        breakDurationMinutes: Int? = null,
+        breakPaid: Boolean = false
     ): Worked {
         requireValid(clockInMinutes)
         requireValid(clockOutMinutes)
@@ -59,16 +72,55 @@ object HoursCalc {
         val gross = outOnTimeline - clockInMinutes
 
         val lunch = usableLunch(clockInMinutes, outOnTimeline, lunchOutMinutes, lunchInMinutes)
-        val net = if (lunch != null) {
-            (lunch.first - clockInMinutes) + (outOnTimeline - lunch.second)
-        } else {
-            gross
+        val (net, lunchApplied, breakApplied) = when {
+            lunch != null -> {
+                val n = (lunch.first - clockInMinutes) + (outOnTimeline - lunch.second)
+                Triple(n, true, false)
+            }
+            shouldApplyBreakDuration(breakDurationMinutes, breakPaid) -> {
+                val breakMins = breakDurationMinutes!!.coerceAtLeast(0)
+                Triple(max(0, gross - min(breakMins, gross)), false, true)
+            }
+            else -> Triple(gross, false, false)
         }
         return Worked(
             hours = roundToHundredths(net / 60.0),
-            lunchApplied = lunch != null,
-            overnight = overnight
+            lunchApplied = lunchApplied,
+            overnight = overnight,
+            breakDurationApplied = breakApplied
         )
+    }
+
+    /**
+     * Place an unpaid break of [durationMinutes] inside the shift so it can be
+     * stored as lunchOut/lunchIn when the user picks a duration instead of times.
+     * Prefers a noon start when that window fits; otherwise centers the break.
+     */
+    fun lunchWindowForBreakDuration(
+        clockInMinutes: Int,
+        clockOutMinutes: Int,
+        durationMinutes: Int,
+        equalOutMeansFullDay: Boolean = false
+    ): Pair<Int, Int>? {
+        if (durationMinutes <= 0) return null
+        requireValid(clockInMinutes)
+        requireValid(clockOutMinutes)
+        val outOnTimeline = expand(clockOutMinutes, clockInMinutes, equalOutMeansFullDay)
+        val gross = outOnTimeline - clockInMinutes
+        if (durationMinutes >= gross) return null
+
+        val noon = 12 * 60
+        val noonOnTimeline = expand(noon, clockInMinutes)
+        val noonEnd = noonOnTimeline + durationMinutes
+        val (startOnTimeline, endOnTimeline) = if (
+            noonOnTimeline > clockInMinutes && noonEnd < outOnTimeline
+        ) {
+            noonOnTimeline to noonEnd
+        } else {
+            val mid = clockInMinutes + (gross - durationMinutes) / 2
+            mid to (mid + durationMinutes)
+        }
+        return (startOnTimeline % MINUTES_PER_DAY) to (endOnTimeline % MINUTES_PER_DAY)
     }
 
     fun isOvernight(
@@ -98,15 +150,21 @@ object HoursCalc {
         clockInMinutes: Int?,
         clockOutMinutes: Int?,
         lunchOutMinutes: Int?,
-        lunchInMinutes: Int?
+        lunchInMinutes: Int?,
+        breakDurationMinutes: Int? = null
     ): String? {
         val range = formatRange(clockInMinutes, clockOutMinutes) ?: return null
-        return if (lunchOutMinutes != null && lunchInMinutes != null) {
-            "$range  ·  Lunch ${formatClock(lunchOutMinutes)} – ${formatClock(lunchInMinutes)}"
-        } else {
-            range
+        return when {
+            lunchOutMinutes != null && lunchInMinutes != null ->
+                "$range  ·  Break ${formatClock(lunchOutMinutes)} – ${formatClock(lunchInMinutes)}"
+            breakDurationMinutes != null && breakDurationMinutes > 0 ->
+                "$range  ·  Break ${breakDurationMinutes}m"
+            else -> range
         }
     }
+
+    private fun shouldApplyBreakDuration(breakDurationMinutes: Int?, breakPaid: Boolean): Boolean =
+        !breakPaid && breakDurationMinutes != null && breakDurationMinutes > 0
 
     private fun usableLunch(
         clockIn: Int,

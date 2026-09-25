@@ -41,6 +41,8 @@
 
         <!-- Fired by AlarmManager; not launched by other apps -->
         <receiver android:name=".receiver.DailyReminderReceiver" android:exported="false" />
+        <receiver android:name=".receiver.EndOfDayReminderReceiver" android:exported="false" />
+        <receiver android:name=".receiver.EndOfDayActionReceiver" android:exported="false" />
         <receiver android:name=".receiver.WeeklyResetReceiver" android:exported="false" />
 
         <!-- Must be exported to receive the system BOOT_COMPLETED broadcast -->
