@@ -71,6 +71,10 @@ class WorkHoursViewModel(
     private val _weeklyGoalHours = MutableStateFlow(ReminderPreferences.getWeeklyGoalHours(appContext))
     val weeklyGoalHours: StateFlow<Double> = _weeklyGoalHours
 
+    /** 0.0 means unset — Home/History hide rough pay estimate. */
+    private val _hourlyRate = MutableStateFlow(ReminderPreferences.getHourlyRate(appContext))
+    val hourlyRate: StateFlow<Double> = _hourlyRate
+
     private val _weekStartDay = MutableStateFlow(weekStartDay())
     val configuredWeekStartDay: StateFlow<DayOfWeek> = _weekStartDay
 
@@ -281,6 +285,7 @@ class WorkHoursViewModel(
 
     fun notifyPrefsChanged(weekStartChanged: Boolean = false) {
         _weeklyGoalHours.value = ReminderPreferences.getWeeklyGoalHours(appContext)
+        _hourlyRate.value = ReminderPreferences.getHourlyRate(appContext)
         _weekStartDay.value = weekStartDay()
         refreshWeekBoundary()
         homeAnchorDate.value = LocalDate.now()
@@ -300,6 +305,7 @@ class WorkHoursViewModel(
         refreshWeekBoundary()
         homeAnchorDate.value = LocalDate.now()
         _weeklyGoalHours.value = ReminderPreferences.getWeeklyGoalHours(appContext)
+        _hourlyRate.value = ReminderPreferences.getHourlyRate(appContext)
         _weekStartDay.value = weekStartDay()
         _colorTheme.value = ThemePreferences.getColorTheme(appContext)
         _fontStyle.value = ThemePreferences.getFontStyle(appContext)

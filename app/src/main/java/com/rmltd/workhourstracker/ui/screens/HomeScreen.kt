@@ -26,13 +26,13 @@ import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.util.HomeManualTimes
+import com.rmltd.workhourstracker.util.PayEstimate
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlin.math.max
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,14 +46,18 @@ fun HomeScreen(
     val entries by viewModel.currentWeekEntries.collectAsState()
     val weekStart by viewModel.weekStart.collectAsState()
     val weeklyGoal by viewModel.weeklyGoalHours.collectAsState()
+    val hourlyRate by viewModel.hourlyRate.collectAsState()
     val homeClock by viewModel.homeClockUi.collectAsState()
     val clockBusy by viewModel.clockOpInProgress.collectAsState()
     val daysInWeek = viewModel.daysInWeek(weekStart)
     val total = viewModel.runningTotal(entries)
     val today = LocalDate.now()
     val todayInThisWeek = daysInWeek.contains(today)
-    val progress = if (weeklyGoal > 0.0) (total / weeklyGoal).toFloat().coerceIn(0f, 1f) else 0f
-    val remaining = max(0.0, weeklyGoal - total)
+    val progress = PayEstimate.progressFraction(total, weeklyGoal)
+    val remaining = PayEstimate.remainingHours(total, weeklyGoal)
+    val overtime = PayEstimate.isOvertime(total, weeklyGoal)
+    val overtimeHrs = PayEstimate.overtimeHours(total, weeklyGoal)
+    val weekPayEstimate = PayEstimate.roughPay(total, hourlyRate)
 
     var showOvernightDialog by remember { mutableStateOf(false) }
     var showManualOvernightConfirm by remember { mutableStateOf(false) }
@@ -164,11 +168,26 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
+            val stripContainer = if (overtime) {
+                MaterialTheme.colorScheme.tertiaryContainer
+            } else {
+                MaterialTheme.colorScheme.primaryContainer
+            }
+            val stripOn = if (overtime) {
+                MaterialTheme.colorScheme.onTertiaryContainer
+            } else {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            }
+            val stripProgressColor = if (overtime) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.primary
+            }
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = stripContainer
                 ),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
             ) {
@@ -186,41 +205,54 @@ fun HomeScreen(
                             progress = progress,
                             modifier = Modifier.fillMaxSize(),
                             strokeWidth = 10.dp,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = stripProgressColor,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                         Text(
                             "${(progress * 100).toInt()}%",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = stripOn
                         )
                     }
                     Spacer(Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
+                            "This week",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = stripOn.copy(alpha = 0.85f)
+                        )
+                        Text(
                             "${weekStart.format(DateTimeFormatter.ofPattern("MMM d"))} – " +
                                 daysInWeek.last().format(DateTimeFormatter.ofPattern("MMM d")),
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = stripOn
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             formatHours(total),
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = stripOn
                         )
                         Text(
-                            "Total",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            "Goal ${formatHours(weeklyGoal)} · ${formatHours(remaining)} remaining",
+                            if (overtime) {
+                                "Goal ${formatHours(weeklyGoal)} · ${formatHours(overtimeHrs)} over"
+                            } else {
+                                "Goal ${formatHours(weeklyGoal)} · ${formatHours(remaining)} remaining"
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            color = stripOn.copy(alpha = 0.85f)
                         )
+                        weekPayEstimate?.let { pay ->
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = stripOn.copy(alpha = 0.9f)
+                            )
+                        }
                     }
                 }
             }

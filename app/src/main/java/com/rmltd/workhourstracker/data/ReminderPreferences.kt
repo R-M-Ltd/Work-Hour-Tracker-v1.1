@@ -6,9 +6,11 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 
 /**
- * Persistent storage for reminder, week-start, and weekly-goal preferences.
+ * Persistent storage for reminder, week-start, weekly-goal, and optional
+ * hourly-rate preferences.
  * Defaults: reminder 6:00 PM enabled; week starts Wednesday; goal 40.00 hours;
- * end-of-day cutoff 8:00 PM enabled (fires only while still clocked in).
+ * end-of-day cutoff 8:00 PM enabled (fires only while still clocked in);
+ * hourly rate unset (0 → hide pay estimate).
  */
 object ReminderPreferences {
 
@@ -23,6 +25,7 @@ object ReminderPreferences {
     private const val KEY_EOD_ENABLED = "end_of_day_enabled"
     private const val KEY_EOD_FIRED_EPOCH = "end_of_day_fired_epoch_day"
     private const val KEY_EOD_SNOOZE_UNTIL = "end_of_day_snooze_until_millis"
+    private const val KEY_HOURLY_RATE = "hourly_rate"
 
     private const val DEFAULT_HOUR = 18
     private const val DEFAULT_MINUTE = 0
@@ -76,6 +79,22 @@ object ReminderPreferences {
         val safe = hours.coerceIn(0.01, 168.0)
         prefs(context).edit()
             .putString(KEY_WEEKLY_GOAL, "%.2f".format(java.util.Locale.US, safe))
+            .apply()
+    }
+
+    /**
+     * Optional hourly rate for rough pay estimates. 0.0 means unset — UI hides
+     * the estimate. Stored as Locale.US decimal string like weekly goal.
+     */
+    fun getHourlyRate(context: Context): Double {
+        val stored = prefs(context).getString(KEY_HOURLY_RATE, null) ?: return 0.0
+        return stored.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
+    }
+
+    fun setHourlyRate(context: Context, rate: Double) {
+        val safe = rate.coerceIn(0.0, 10_000.0)
+        prefs(context).edit()
+            .putString(KEY_HOURLY_RATE, "%.2f".format(java.util.Locale.US, safe))
             .apply()
     }
 

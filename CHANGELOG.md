@@ -3,6 +3,14 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.14] — versionCode 16
+
+Phase B — Home clarity:
+
+- **Week strip:** Home progress card labeled "This week"; overtime tint (`tertiaryContainer`) when hours exceed the weekly goal, with "Xh over" instead of remaining.
+- **Hourly rate (optional):** Settings field (USD-style `$`, persisted like other prefs). Leave blank/0 to hide. Home week strip and History all-time card show **Est. $X.XX (not payroll)** = hours × rate when set.
+- Pure `PayEstimate` helpers + JVM unit tests (overtime threshold, rough pay math, `$` formatting).
+
 ## [1.3.13] — versionCode 15
 
 Phase A — daily reliability:

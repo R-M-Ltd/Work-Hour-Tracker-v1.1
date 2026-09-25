@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.DailyEntry
 import com.rmltd.workhourstracker.data.WeekLog
 import com.rmltd.workhourstracker.util.CsvExporter
+import com.rmltd.workhourstracker.util.PayEstimate
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import kotlinx.coroutines.launch
@@ -38,6 +39,8 @@ fun LogScreen(
     val scope = rememberCoroutineScope()
     val weekLogs by viewModel.weekLogs.collectAsState()
     val allTimeTotal by viewModel.allTimeTotal.collectAsState()
+    val hourlyRate by viewModel.hourlyRate.collectAsState()
+    val allTimePayEstimate = PayEstimate.roughPay(allTimeTotal, hourlyRate)
     var exporting by remember { mutableStateOf(false) }
     var showAddMissed by remember { mutableStateOf(false) }
 
@@ -120,6 +123,14 @@ fun LogScreen(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
+                    allTimePayEstimate?.let { pay ->
+                        Text(
+                            "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
+                        )
+                    }
                     Text(
                         "Sum of all logged days (including this week). " +
                             "Archived weeks with hours are listed below; empty weeks are hidden. " +

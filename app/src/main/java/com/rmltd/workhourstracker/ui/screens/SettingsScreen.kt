@@ -66,6 +66,13 @@ fun SettingsScreen(
             "%.2f".format(Locale.US, ReminderPreferences.getWeeklyGoalHours(context))
         )
     }
+    var rateText by remember {
+        mutableStateOf(
+            ReminderPreferences.getHourlyRate(context).let { rate ->
+                if (rate <= 0.0) "" else "%.2f".format(Locale.US, rate)
+            }
+        )
+    }
     var colorTheme by remember { mutableStateOf(ThemePreferences.getColorTheme(context)) }
     var fontStyle by remember { mutableStateOf(ThemePreferences.getFontStyle(context)) }
     var colorSectionExpanded by remember { mutableStateOf(true) }
@@ -212,6 +219,66 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Save weekly goal")
+                    }
+                }
+            }
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Hourly rate (optional)", style = MaterialTheme.typography.titleMedium)
+
+                    OutlinedTextField(
+                        value = rateText,
+                        onValueChange = { rateText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                        label = { Text("Dollars per hour") },
+                        supportingText = {
+                            Text(
+                                "Rough pay estimate on Home / History = hours × rate. " +
+                                    "Estimate only — not payroll. Uses $ (USD-style). " +
+                                    "Leave blank or 0 to hide."
+                            )
+                        },
+                        prefix = { Text("$") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Button(
+                        onClick = {
+                            val trimmed = rateText.trim()
+                            if (trimmed.isEmpty()) {
+                                ReminderPreferences.setHourlyRate(context, 0.0)
+                                rateText = ""
+                                viewModel.notifyPrefsChanged()
+                                Toast.makeText(context, "Hourly rate cleared", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val parsed = trimmed.toDoubleOrNull()
+                            if (parsed == null || parsed < 0.0) {
+                                Toast.makeText(context, "Enter a valid rate (or blank to clear)", Toast.LENGTH_SHORT).show()
+                            } else {
+                                ReminderPreferences.setHourlyRate(context, parsed)
+                                val saved = ReminderPreferences.getHourlyRate(context)
+                                rateText = if (saved <= 0.0) "" else "%.2f".format(Locale.US, saved)
+                                viewModel.notifyPrefsChanged()
+                                Toast.makeText(
+                                    context,
+                                    if (saved <= 0.0) "Hourly rate cleared" else "Hourly rate saved",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Save hourly rate")
                     }
                 }
             }
