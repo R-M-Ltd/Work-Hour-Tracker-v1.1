@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Work Hours Tracker</string>
+    <string name="widget_title">Work Hours</string>
+    <string name="widget_description">Today\'s clock status and week hours vs goal. Tap to open the app.</string>
+    <string name="widget_status_placeholder">Not clocked in</string>
+    <string name="widget_week_placeholder">Week 0.00h / 40.00h</string>
 </resources>

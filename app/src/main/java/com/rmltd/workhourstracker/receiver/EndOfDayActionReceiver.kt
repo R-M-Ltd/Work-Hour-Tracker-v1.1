@@ -7,6 +7,7 @@ import android.content.Intent
 import com.rmltd.workhourstracker.WorkHoursApplication
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.worker.ReminderScheduler
+import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,6 +35,7 @@ class EndOfDayActionReceiver : BroadcastReceiver() {
                             val now = LocalTime.now()
                             val minutes = now.hour * 60 + now.minute
                             repo.clockOutNow(LocalDate.now(), minutes)
+                            WorkHoursWidgetUpdater.requestUpdate(context)
                         }
                         ReminderPreferences.clearEndOfDaySnooze(context)
                         ReminderScheduler.scheduleEndOfDayReminder(context)

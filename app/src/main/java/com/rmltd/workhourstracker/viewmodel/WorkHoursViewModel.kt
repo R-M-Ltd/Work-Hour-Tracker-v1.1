@@ -17,6 +17,7 @@ import com.rmltd.workhourstracker.data.WeekLog
 import com.rmltd.workhourstracker.data.WorkHoursRepository
 import com.rmltd.workhourstracker.util.BackupCodec
 import com.rmltd.workhourstracker.util.WeekUtils
+import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -140,6 +141,7 @@ class WorkHoursViewModel(
                     onResult(result)
                 } finally {
                     _clockOpInProgress.value = false
+                    refreshHomeWidget()
                 }
             }
         }
@@ -173,6 +175,7 @@ class WorkHoursViewModel(
                     onDone()
                 } finally {
                     _clockOpInProgress.value = false
+                    refreshHomeWidget()
                 }
             }
         }
@@ -205,6 +208,7 @@ class WorkHoursViewModel(
             } finally {
                 clockFlight.set(false)
                 _clockOpInProgress.value = false
+                refreshHomeWidget()
             }
         }
     }
@@ -237,6 +241,7 @@ class WorkHoursViewModel(
             } finally {
                 clockFlight.set(false)
                 _clockOpInProgress.value = false
+                refreshHomeWidget()
             }
         }
     }
@@ -259,6 +264,7 @@ class WorkHoursViewModel(
             } finally {
                 clockFlight.set(false)
                 _clockOpInProgress.value = false
+                refreshHomeWidget()
             }
         }
     }
@@ -369,6 +375,12 @@ class WorkHoursViewModel(
                 }
             }
         }
+        refreshHomeWidget()
+    }
+
+
+    private fun refreshHomeWidget() {
+        WorkHoursWidgetUpdater.requestUpdate(appContext)
     }
 
     /** Refresh week boundary + Home today. Called from ON_START/resume and date/TZ broadcasts (L1). */
@@ -383,6 +395,7 @@ class WorkHoursViewModel(
         viewModelScope.launch {
             runCatching { repository.catchUpWeekArchives() }
         }
+        refreshHomeWidget()
     }
 
     private fun refreshWeekBoundary() {

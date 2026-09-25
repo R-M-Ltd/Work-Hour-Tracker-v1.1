@@ -3,6 +3,16 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.16] — versionCode 18
+
+Phase D — Home screen widget (small safe first version):
+
+- **Widget:** Shows today's clock status (Not clocked in / Clocked in since / Completed / Overnight open) and week hours so far vs goal.
+- **Tap:** Opens the app (Home / MainActivity). No clock-in/out actions from the widget (overnight resolve dialogs and ViewModel single-flight stay in-app).
+- **Refresh:** After clock in/out/save, app resume, prefs change, EOD notification clock-out, app start; plus AppWidgetProvider ~30 min `updatePeriodMillis`.
+- Material-ish colors from default purple palette (`primary` / `primaryContainer`) via RemoteViews layout XML.
+- Pure `WidgetContent` builder + JVM unit tests.
+
 ## [1.3.15] — versionCode 17
 
 Phase C — get data out / keep it safe:

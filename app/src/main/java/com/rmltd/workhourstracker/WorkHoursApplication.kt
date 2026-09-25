@@ -5,6 +5,7 @@ import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.data.WorkHoursDatabase
 import com.rmltd.workhourstracker.data.WorkHoursRepository
 import com.rmltd.workhourstracker.worker.ReminderScheduler
+import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,5 +32,6 @@ class WorkHoursApplication : Application() {
         appScope.launch {
             runCatching { repository.catchUpWeekArchives() }
         }
+        WorkHoursWidgetUpdater.requestUpdate(this)
     }
 }
