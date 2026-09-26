@@ -22,11 +22,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.SaveEntryResult
+import com.rmltd.workhourstracker.util.ClockHaptics
 import com.rmltd.workhourstracker.util.HomeManualTimes
 import com.rmltd.workhourstracker.util.HomeOvernightCopy
 import com.rmltd.workhourstracker.util.PayEstimate
@@ -47,6 +49,7 @@ fun HomeScreen(
     onLogLunch: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val entries by viewModel.currentWeekEntries.collectAsState()
     val weekStart by viewModel.weekStart.collectAsState()
     val weeklyGoal by viewModel.weeklyGoalHours.collectAsState()
@@ -315,6 +318,7 @@ fun HomeScreen(
                                                     showOvernightDialog = true
                                                 }
                                                 ClockInResult.STARTED -> {
+                                                    ClockHaptics.performSuccess(view)
                                                     Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
                                                 }
                                                 ClockInResult.ALREADY_OPEN -> {
@@ -331,7 +335,10 @@ fun HomeScreen(
                                         }
                                     },
                                     enabled = homeClock.clockInEnabled && !clockBusy,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 56.dp)
+                                        .semantics { contentDescription = "Clock in now" }
                                 ) {
                                     Text(
                                         "Clock in now",
@@ -342,6 +349,12 @@ fun HomeScreen(
                                 FilledTonalButton(
                                     onClick = {
                                         viewModel.clockOutNow(today) { result ->
+                                            when (result) {
+                                                ClockOutResult.SUCCESS,
+                                                ClockOutResult.SUCCESS_OVERNIGHT ->
+                                                    ClockHaptics.performSuccess(view)
+                                                else -> Unit
+                                            }
                                             val msg = when (result) {
                                                 ClockOutResult.SUCCESS -> "Clocked out now"
                                                 ClockOutResult.SUCCESS_OVERNIGHT ->
@@ -358,7 +371,10 @@ fun HomeScreen(
                                         }
                                     },
                                     enabled = homeClock.clockOutEnabled && !clockBusy,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 56.dp)
+                                        .semantics { contentDescription = "Clock out now" }
                                 ) {
                                     Text(
                                         "Clock out now",
@@ -381,7 +397,10 @@ fun HomeScreen(
                                 TextButton(
                                     onClick = { showForgotClockOut = true },
                                     enabled = !clockBusy,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 48.dp)
+                                        .semantics { contentDescription = "Forgot to clock out" }
                                 ) {
                                     Text(
                                         "Forgot to clock out…",
@@ -397,6 +416,7 @@ fun HomeScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 10.dp)
+                                    .heightIn(min = 56.dp)
                                     .semantics {
                                         contentDescription = "Open Entry to log lunch or break"
                                     }
@@ -439,7 +459,10 @@ fun HomeScreen(
                             Button(
                                 onClick = { tryHomeManualSave() },
                                 enabled = HomeManualTimes.canSave(homeInMinutes, homeOutMinutes) && !clockBusy,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .semantics { contentDescription = "Save today's times" }
                             ) {
                                 Text(
                                     "Save today's times",
@@ -490,7 +513,13 @@ fun HomeScreen(
             item {
                 // Flush bottom: History sits just under day list (no weight filler / extra gap).
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onViewLog, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = onViewLog,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .semantics { contentDescription = "History" }
+                ) {
                     Icon(Icons.Filled.History, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -526,6 +555,12 @@ fun HomeScreen(
                         onClick = {
                             showOvernightDialog = false
                             viewModel.clockOutNow(today) { result ->
+                                when (result) {
+                                    ClockOutResult.SUCCESS,
+                                    ClockOutResult.SUCCESS_OVERNIGHT ->
+                                        ClockHaptics.performSuccess(view)
+                                    else -> Unit
+                                }
                                 val msg = when (result) {
                                     ClockOutResult.SUCCESS_OVERNIGHT ->
                                         HomeOvernightCopy.clockOutOvernightToast(
@@ -620,6 +655,12 @@ fun HomeScreen(
                         val minutes = state.hour * 60 + state.minute
                         showForgotClockOut = false
                         viewModel.clockOutAt(today, minutes) { result ->
+                            when (result) {
+                                ClockOutResult.SUCCESS,
+                                ClockOutResult.SUCCESS_OVERNIGHT ->
+                                    ClockHaptics.performSuccess(view)
+                                else -> Unit
+                            }
                             val msg = when (result) {
                                 ClockOutResult.SUCCESS ->
                                     "Clocked out at ${HoursCalc.formatClock(minutes)}"
@@ -745,9 +786,17 @@ private fun HomeClockTimeRow(
     minutes: Int?,
     onPick: () -> Unit
 ) {
+    val cd = when (label) {
+        "Clock in" -> if (minutes == null) "Clock in time" else "Clock in time ${HoursCalc.formatClock(minutes)}"
+        "Clock out" -> if (minutes == null) "Clock out time" else "Clock out time ${HoursCalc.formatClock(minutes)}"
+        else -> label
+    }
     OutlinedButton(
         onClick = onPick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .semantics { contentDescription = cd }
     ) {
         Icon(Icons.Filled.Schedule, contentDescription = null)
         Spacer(Modifier.width(8.dp))
@@ -818,13 +867,26 @@ private fun DayRow(
                     )
                 }
             }
-            TextButton(onClick = onClick) {
+            val dayName = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+            val actionLabel = when {
+                hours != null && hours > 0.0 -> formatHours(hours)
+                hasEntry -> "Edit"
+                else -> "Add"
+            }
+            val actionCd = when {
+                hours != null && hours > 0.0 ->
+                    "${formatHours(hours)} hours, edit $dayName"
+                hasEntry -> "Edit $dayName"
+                else -> "Add hours for $dayName"
+            }
+            TextButton(
+                onClick = onClick,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .semantics { contentDescription = actionCd }
+            ) {
                 Text(
-                    when {
-                        hours != null && hours > 0.0 -> formatHours(hours)
-                        hasEntry -> "Edit"
-                        else -> "Add"
-                    },
+                    actionLabel,
                     fontWeight = FontWeight.SemiBold
                 )
             }

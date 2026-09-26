@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.rmltd.workhourstracker.data.CloudSyncPreferences
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.data.ThemePreferences
 import com.rmltd.workhourstracker.ui.theme.AppFontStyle
@@ -40,6 +43,7 @@ import com.rmltd.workhourstracker.ui.theme.previewPrimary
 import com.rmltd.workhourstracker.util.BackupCodec
 import com.rmltd.workhourstracker.util.BackupShare
 import com.rmltd.workhourstracker.util.CsvExporter
+import com.rmltd.workhourstracker.util.PdfExporter
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.WeekUtils
 import com.rmltd.workhourstracker.worker.ReminderScheduler
@@ -89,6 +93,11 @@ fun SettingsScreen(
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showSettingsExportMenu by remember { mutableStateOf(false) }
     var showSettingsRangeExport by remember { mutableStateOf(false) }
+    var showSettingsPdfMenu by remember { mutableStateOf(false) }
+    var showSettingsPdfRangeExport by remember { mutableStateOf(false) }
+    var cloudSyncEnabled by remember { mutableStateOf(CloudSyncPreferences.isEnabled(context)) }
+    var cloudSyncLinked by remember { mutableStateOf(CloudSyncPreferences.isLinked(context)) }
+    var showCloudSyncInfo by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val weekStart by viewModel.weekStart.collectAsState()
     var exactAlarmsAllowed by remember {
@@ -510,7 +519,7 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "Home-screen widget uses the default purple palette and does not follow in-app theme or font.",
+                        "Home-screen widget uses the same color palette (and light/dark) as the app.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -571,92 +580,196 @@ fun SettingsScreen(
                 ) {
                     Text("Export / share", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Share a CSV of hours via the system share sheet (same as History).",
+                        "Share a CSV or a printable PDF timesheet via the system share sheet (same ranges as History).",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Box {
-                        OutlinedButton(
-                            onClick = { showSettingsExportMenu = true },
-                            enabled = !backupBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Export CSV…", maxLines = 2, softWrap = true)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedButton(
+                                onClick = { showSettingsExportMenu = true },
+                                enabled = !backupBusy,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { contentDescription = "Export CSV" }
+                            ) {
+                                Text("Export CSV…", maxLines = 2, softWrap = true)
+                            }
+                            DropdownMenu(
+                                expanded = showSettingsExportMenu,
+                                onDismissRequest = { showSettingsExportMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("This week") },
+                                    onClick = {
+                                        showSettingsExportMenu = false
+                                        backupBusy = true
+                                        scope.launch {
+                                            try {
+                                                val weeks = viewModel.loadExportWeeks()
+                                                val end = WeekUtils.weekEndFor(weekStart)
+                                                val filtered = CsvExporter.filterByDateRange(
+                                                    weeks, weekStart, end
+                                                )
+                                                val n = filtered.sumOf { it.second.size }
+                                                if (n == 0) {
+                                                    Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    val intent = CsvExporter.shareCsv(
+                                                        context,
+                                                        CsvExporter.buildCsv(filtered),
+                                                        "work_hours_${weekStart}_${end}.csv"
+                                                    )
+                                                    context.startActivity(
+                                                        Intent.createChooser(intent, "Export work hours CSV")
+                                                    )
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                            } finally {
+                                                backupBusy = false
+                                            }
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Date range…") },
+                                    onClick = {
+                                        showSettingsExportMenu = false
+                                        showSettingsRangeExport = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("All time") },
+                                    onClick = {
+                                        showSettingsExportMenu = false
+                                        backupBusy = true
+                                        scope.launch {
+                                            try {
+                                                val weeks = viewModel.loadExportWeeks()
+                                                val n = weeks.sumOf { it.second.size }
+                                                if (n == 0) {
+                                                    Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    val intent = CsvExporter.shareCsv(
+                                                        context,
+                                                        CsvExporter.buildCsv(weeks)
+                                                    )
+                                                    context.startActivity(
+                                                        Intent.createChooser(intent, "Export work hours CSV")
+                                                    )
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                            } finally {
+                                                backupBusy = false
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                         }
-                        DropdownMenu(
-                            expanded = showSettingsExportMenu,
-                            onDismissRequest = { showSettingsExportMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("This week") },
-                                onClick = {
-                                    showSettingsExportMenu = false
-                                    backupBusy = true
-                                    scope.launch {
-                                        try {
-                                            val weeks = viewModel.loadExportWeeks()
-                                            val end = WeekUtils.weekEndFor(weekStart)
-                                            val filtered = CsvExporter.filterByDateRange(
-                                                weeks, weekStart, end
-                                            )
-                                            val n = filtered.sumOf { it.second.size }
-                                            if (n == 0) {
-                                                Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                val intent = CsvExporter.shareCsv(
-                                                    context,
-                                                    CsvExporter.buildCsv(filtered),
-                                                    "work_hours_${weekStart}_${end}.csv"
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedButton(
+                                onClick = { showSettingsPdfMenu = true },
+                                enabled = !backupBusy,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { contentDescription = "Export PDF" }
+                            ) {
+                                Text("Export PDF", maxLines = 2, softWrap = true)
+                            }
+                            DropdownMenu(
+                                expanded = showSettingsPdfMenu,
+                                onDismissRequest = { showSettingsPdfMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("This week") },
+                                    onClick = {
+                                        showSettingsPdfMenu = false
+                                        backupBusy = true
+                                        scope.launch {
+                                            try {
+                                                val weeks = viewModel.loadExportWeeks()
+                                                val end = WeekUtils.weekEndFor(weekStart)
+                                                val filtered = CsvExporter.filterByDateRange(
+                                                    weeks, weekStart, end
                                                 )
-                                                context.startActivity(
-                                                    Intent.createChooser(intent, "Export work hours CSV")
-                                                )
+                                                val n = filtered.sumOf { it.second.size }
+                                                if (n == 0) {
+                                                    Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    val intent = PdfExporter.sharePdf(
+                                                        context,
+                                                        weeks,
+                                                        startInclusive = weekStart,
+                                                        endInclusive = end,
+                                                        fileName = "work_hours_${weekStart}_${end}.pdf"
+                                                    )
+                                                    context.startActivity(
+                                                        Intent.createChooser(intent, "Export work hours PDF")
+                                                    )
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Exported $weekStart → $end ($n days)",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                            } finally {
+                                                backupBusy = false
                                             }
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
-                                        } finally {
-                                            backupBusy = false
                                         }
                                     }
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Date range…") },
-                                onClick = {
-                                    showSettingsExportMenu = false
-                                    showSettingsRangeExport = true
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("All time") },
-                                onClick = {
-                                    showSettingsExportMenu = false
-                                    backupBusy = true
-                                    scope.launch {
-                                        try {
-                                            val weeks = viewModel.loadExportWeeks()
-                                            val n = weeks.sumOf { it.second.size }
-                                            if (n == 0) {
-                                                Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                val intent = CsvExporter.shareCsv(
-                                                    context,
-                                                    CsvExporter.buildCsv(weeks)
-                                                )
-                                                context.startActivity(
-                                                    Intent.createChooser(intent, "Export work hours CSV")
-                                                )
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Date range…") },
+                                    onClick = {
+                                        showSettingsPdfMenu = false
+                                        showSettingsPdfRangeExport = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("All time") },
+                                    onClick = {
+                                        showSettingsPdfMenu = false
+                                        backupBusy = true
+                                        scope.launch {
+                                            try {
+                                                val weeks = viewModel.loadExportWeeks()
+                                                val n = weeks.sumOf { it.second.size }
+                                                if (n == 0) {
+                                                    Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    val intent = PdfExporter.sharePdf(
+                                                        context,
+                                                        weeks,
+                                                        fileName = "work_hours_all.pdf"
+                                                    )
+                                                    context.startActivity(
+                                                        Intent.createChooser(intent, "Export work hours PDF")
+                                                    )
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                            } finally {
+                                                backupBusy = false
                                             }
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
-                                        } finally {
-                                            backupBusy = false
                                         }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
+                    Text(
+                        "Share a printable timesheet for the selected range",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -709,7 +822,9 @@ fun SettingsScreen(
                             }
                         },
                         enabled = !backupBusy,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "Backup and share file" }
                     ) {
                         Text(if (backupBusy) "Working…" else "Backup / share file", maxLines = 2, softWrap = true)
                     }
@@ -718,9 +833,75 @@ fun SettingsScreen(
                             restorePicker.launch(arrayOf("application/json", "text/*", "*/*"))
                         },
                         enabled = !backupBusy,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "Restore from file" }
                     ) {
                         Text("Restore from file…", maxLines = 2, softWrap = true)
+                    }
+                }
+            }
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Cloud sync", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Optional. Your hours stay on this device until you turn this on.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = cloudSyncEnabled,
+                            onCheckedChange = { on ->
+                                cloudSyncEnabled = on
+                                CloudSyncPreferences.setEnabled(context, on)
+                                Toast.makeText(
+                                    context,
+                                    if (on) "Cloud sync on" else "Cloud sync off",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            modifier = Modifier.semantics { contentDescription = "Cloud sync" }
+                        )
+                    }
+                    if (cloudSyncEnabled) {
+                        Text(
+                            if (cloudSyncLinked) "Linked" else "Not linked",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedButton(
+                            onClick = { showCloudSyncInfo = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .semantics {
+                                    contentDescription = if (cloudSyncLinked) {
+                                        "Manage cloud sync"
+                                    } else {
+                                        "Sign in to sync"
+                                    }
+                                }
+                        ) {
+                            Text(
+                                if (cloudSyncLinked) "Manage" else "Sign in to sync",
+                                maxLines = 2,
+                                softWrap = true
+                            )
+                        }
                     }
                 }
             }
@@ -897,6 +1078,77 @@ fun SettingsScreen(
         )
     }
 
+    if (showSettingsPdfRangeExport) {
+        ExportRangeDialog(
+            initialStart = weekStart,
+            initialEnd = WeekUtils.weekEndFor(weekStart),
+            onDismiss = { showSettingsPdfRangeExport = false },
+            onConfirm = { start, end ->
+                showSettingsPdfRangeExport = false
+                if (end.isBefore(start)) {
+                    Toast.makeText(context, "End date must be on or after start", Toast.LENGTH_SHORT).show()
+                } else if (!backupBusy) {
+                    backupBusy = true
+                    scope.launch {
+                        try {
+                            val weeks = viewModel.loadExportWeeks()
+                            val filtered = CsvExporter.filterByDateRange(weeks, start, end)
+                            val n = filtered.sumOf { it.second.size }
+                            if (n == 0) {
+                                Toast.makeText(
+                                    context,
+                                    "Nothing to export for $start → $end",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                val intent = PdfExporter.sharePdf(
+                                    context,
+                                    weeks,
+                                    startInclusive = start,
+                                    endInclusive = end,
+                                    fileName = "work_hours_${start}_${end}.pdf"
+                                )
+                                context.startActivity(
+                                    Intent.createChooser(intent, "Export work hours PDF")
+                                )
+                                Toast.makeText(
+                                    context,
+                                    "Exported $start → $end ($n days)",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(
+                                context,
+                                "Export failed: ${e.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } finally {
+                            backupBusy = false
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    if (showCloudSyncInfo) {
+        AlertDialog(
+            onDismissRequest = { showCloudSyncInfo = false },
+            title = { Text(if (cloudSyncLinked) "Manage cloud sync" else "Sign in to sync") },
+            text = {
+                Text(
+                    "Cloud sync is prepared for a future provider. " +
+                        "No automatic upload runs until you link an account in a later release. " +
+                        "Your hours stay on this device."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showCloudSyncInfo = false }) { Text("OK") }
+            }
+        )
+    }
+
     if (showRestoreConfirm) {
         AlertDialog(
             onDismissRequest = {
@@ -941,6 +1193,8 @@ fun SettingsScreen(
                                 rateText = if (rate <= 0.0) "" else "%.2f".format(Locale.US, rate)
                                 colorTheme = ThemePreferences.getColorTheme(context)
                                 fontStyle = ThemePreferences.getFontStyle(context)
+                                cloudSyncEnabled = CloudSyncPreferences.isEnabled(context)
+                                cloudSyncLinked = CloudSyncPreferences.isLinked(context)
                                 Toast.makeText(
                                     context,
                                     "Restored ${payload.entries.size} days from backup",

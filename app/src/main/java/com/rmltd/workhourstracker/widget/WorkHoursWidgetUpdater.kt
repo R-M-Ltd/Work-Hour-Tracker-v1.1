@@ -5,12 +5,14 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.widget.RemoteViews
 import com.rmltd.workhourstracker.MainActivity
 import com.rmltd.workhourstracker.R
 import com.rmltd.workhourstracker.WorkHoursApplication
 import com.rmltd.workhourstracker.data.ClockDayState
 import com.rmltd.workhourstracker.data.ReminderPreferences
+import com.rmltd.workhourstracker.data.ThemePreferences
 import com.rmltd.workhourstracker.util.WeekUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +25,9 @@ import java.time.LocalDate
 /**
  * Builds RemoteViews from Room + prefs and pushes them to all widget instances.
  * Display-only (tap opens [MainActivity] / Home) — no clock actions from the widget.
+ *
+ * Chrome colors follow in-app [ThemePreferences] + system light/dark (1.3.25;
+ * reverses 1.3.24 always-purple). Status strings stay in [WidgetContent].
  *
  * All refresh entry points ([requestUpdate], [updateAppWidgetIds], [updateAllSync])
  * share one mutex + generation gate: overlapping launches cannot apply a stale
@@ -105,6 +110,7 @@ object WorkHoursWidgetUpdater {
         views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_title))
         views.setTextViewText(R.id.widget_status, display.statusLine)
         views.setTextViewText(R.id.widget_week, display.weekLine)
+        applyThemeChrome(context, views, display)
 
         val openApp = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -119,6 +125,40 @@ object WorkHoursWidgetUpdater {
         )
         views.setOnClickPendingIntent(R.id.widget_root, pending)
         return views
+    }
+
+    /** Map active AppTheme + system night mode onto RemoteViews text + chrome bitmap. */
+    private fun applyThemeChrome(
+        context: Context,
+        views: RemoteViews,
+        display: WidgetContent.Display
+    ) {
+        val dark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        val theme = ThemePreferences.getColorTheme(context)
+        val colors = WidgetThemeColors.resolve(theme, dark)
+
+        views.setInt(R.id.widget_title, "setTextColor", colors.primary)
+        views.setInt(R.id.widget_status, "setTextColor", colors.onSurface)
+        views.setInt(R.id.widget_week, "setTextColor", colors.onSurfaceVariant)
+
+        val density = context.resources.displayMetrics.density
+        val width = (250 * density).toInt().coerceAtLeast(48)
+        val height = (110 * density).toInt().coerceAtLeast(48)
+        val chrome = WidgetThemeColors.buildBackgroundBitmap(
+            fillColor = colors.primaryContainer,
+            accentColor = colors.primary,
+            widthPx = width,
+            heightPx = height,
+            cornerPx = 20f * density,
+            accentHeightPx = 3f * density
+        )
+        views.setImageViewBitmap(R.id.widget_chrome, chrome)
+
+        val rootCd = "${context.getString(R.string.widget_title)}. ${display.statusLine}. ${display.weekLine}"
+        views.setContentDescription(R.id.widget_root, rootCd)
+        views.setContentDescription(R.id.widget_status, display.statusLine)
+        views.setContentDescription(R.id.widget_week, display.weekLine)
     }
 
     private suspend fun loadDisplay(context: Context): WidgetContent.Display {

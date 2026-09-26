@@ -3,6 +3,18 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.25] — versionCode 27
+
+Five deltas from Ivan UI pack `ui-rebuild-1.3.25` (baseline 1.3.24 / `2b8f1da`):
+
+- **Widget follows in-app theme:** Reverses 1.3.24 always-purple. RemoteViews chrome (accent bar, fill, title/status/week text) maps from active `AppTheme` + system light/dark. View IDs and `WidgetContent` status strings unchanged. Settings Color helper: “Home-screen widget uses the same color palette (and light/dark) as the app.” Theme change refreshes the widget.
+- **Haptics:** Light confirm haptic on successful clock in, clock out, overnight clock out, and Forgot confirm only. No new Home controls; Material ripple remains the visual press affordance.
+- **Accessibility:** Punch controls prefer ~56 dp height (min 48). TalkBack `contentDescription`s per pack table (Clock in/out, Forgot, lunch CTA, Save today's times, day Add/Edit, Entry Break start/end / Save entry, Settings Export CSV/PDF / Backup / Restore / Cloud sync, History Export / Add missed day, overnight dialog button labels).
+- **PDF timesheet export:** Settings Export / share — **Export PDF** beside CSV with helper “Share a printable timesheet for the selected range”; range UX mirrors CSV (This week / Date range… / All time). Real shareable `PdfDocument` (title, date range, day rows, totals) via FileProvider + `ACTION_SEND`. CSV/backup unchanged.
+- **Optional cloud sync UI:** Settings section after Backup — switch **off by default**, vendor-neutral. When on: “Not linked” + “Sign in to sync” / “Manage”. Prefs persist enable + linked. No OAuth / Drive / Firebase wiring (`oauthPresentInApp: false`). Sign in/Manage opens a clear dialog that sync is prepared for a future provider — **no automatic cloud upload** until a provider is linked in a later release. Do not sync silently.
+- Locked hexes (all six), Home lunch CTA (nav only), clock states, EOD 8pm/Extend 1h, paid-break Entry, widget IDs/status strings, 1.3.21–1.3.24 fixes kept.
+- Version 1.3.25 / versionCode 27.
+
 ## [1.3.24] — versionCode 26
 
 Appearance + layout polish:

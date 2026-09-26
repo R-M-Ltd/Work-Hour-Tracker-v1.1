@@ -353,6 +353,8 @@ class WorkHoursViewModel(
     fun setColorTheme(theme: AppTheme) {
         ThemePreferences.setColorTheme(appContext, theme)
         _colorTheme.value = theme
+        // Widget chrome follows AppTheme + light/dark (1.3.25).
+        refreshHomeWidget()
     }
 
     fun setFontStyle(style: AppFontStyle) {
