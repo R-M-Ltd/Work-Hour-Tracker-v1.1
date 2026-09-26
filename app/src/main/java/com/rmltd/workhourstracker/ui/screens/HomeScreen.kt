@@ -166,311 +166,342 @@ fun HomeScreen(
             )
         }
     ) { padding ->
-        Column(
+        val stripContainer = if (overtime) {
+            MaterialTheme.colorScheme.tertiaryContainer
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        }
+        val stripOn = if (overtime) {
+            MaterialTheme.colorScheme.onTertiaryContainer
+        } else {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        }
+        val stripProgressColor = if (overtime) {
+            MaterialTheme.colorScheme.tertiary
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+        // Single LazyColumn: whole Home scrolls; no weight(1f) empty gap above History.
+        LazyColumn(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize()
-                .padding(16.dp)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(16.dp)
         ) {
-            val stripContainer = if (overtime) {
-                MaterialTheme.colorScheme.tertiaryContainer
-            } else {
-                MaterialTheme.colorScheme.primaryContainer
-            }
-            val stripOn = if (overtime) {
-                MaterialTheme.colorScheme.onTertiaryContainer
-            } else {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            }
-            val stripProgressColor = if (overtime) {
-                MaterialTheme.colorScheme.tertiary
-            } else {
-                MaterialTheme.colorScheme.primary
-            }
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = stripContainer
-                ),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(20.dp)
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+            item {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = stripContainer
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(96.dp)
+                    Row(
+                        modifier = Modifier
+                            .padding(20.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CircularProgressIndicator(
-                            progress = progress,
-                            modifier = Modifier.fillMaxSize(),
-                            strokeWidth = 10.dp,
-                            color = stripProgressColor,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                        Text(
-                            "${(progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = stripOn
-                        )
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "This week",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = stripOn.copy(alpha = 0.85f)
-                        )
-                        Text(
-                            "${weekStart.format(DateTimeFormatter.ofPattern("MMM d"))} – " +
-                                daysInWeek.last().format(DateTimeFormatter.ofPattern("MMM d")),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = stripOn
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            formatHours(total),
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = stripOn
-                        )
-                        Text(
-                            if (overtime) {
-                                "Goal ${formatHours(weeklyGoal)} · ${formatHours(overtimeHrs)} over"
-                            } else {
-                                "Goal ${formatHours(weeklyGoal)} · ${formatHours(remaining)} remaining"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = stripOn.copy(alpha = 0.85f)
-                        )
-                        weekPayEstimate?.let { pay ->
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = stripOn.copy(alpha = 0.92f)
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(96.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                progress = progress,
+                                modifier = Modifier.fillMaxSize(),
+                                strokeWidth = 10.dp,
+                                color = stripProgressColor,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
+                            Text(
+                                "${(progress * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = stripOn
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "This week",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = stripOn.copy(alpha = 0.85f)
+                            )
+                            Text(
+                                "${weekStart.format(DateTimeFormatter.ofPattern("MMM d"))} – " +
+                                    daysInWeek.last().format(DateTimeFormatter.ofPattern("MMM d")),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = stripOn
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                formatHours(total),
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = stripOn
+                            )
+                            Text(
+                                if (overtime) {
+                                    "Goal ${formatHours(weeklyGoal)} · ${formatHours(overtimeHrs)} over"
+                                } else {
+                                    "Goal ${formatHours(weeklyGoal)} · ${formatHours(remaining)} remaining"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = stripOn.copy(alpha = 0.85f)
+                            )
+                            weekPayEstimate?.let { pay ->
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = stripOn.copy(alpha = 0.92f)
+                                )
+                            }
                         }
                     }
                 }
             }
 
             if (todayInThisWeek) {
-                Spacer(Modifier.height(12.dp))
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "Today",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        if (homeClock.overnightPending) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "Today",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            if (homeClock.overnightPending) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Text(
+                                        "An open shift is still unfinished. Clock out finishes it, or use Clock in for options.",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (homeClock.overnightPending) {
+                                            showOvernightDialog = true
+                                            return@Button
+                                        }
+                                        viewModel.clockInNow(today) { result ->
+                                            when (result) {
+                                                ClockInResult.BLOCKED_OVERNIGHT -> {
+                                                    showOvernightDialog = true
+                                                }
+                                                ClockInResult.STARTED -> {
+                                                    Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
+                                                }
+                                                ClockInResult.ALREADY_OPEN -> {
+                                                    Toast.makeText(context, "Already clocked in", Toast.LENGTH_SHORT).show()
+                                                }
+                                                ClockInResult.ALREADY_CLOSED -> {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Today already has hours — edit the day to change it",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        }
+                                    },
+                                    enabled = homeClock.clockInEnabled && !clockBusy,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        "Clock in now",
+                                        maxLines = 2,
+                                        softWrap = true
+                                    )
+                                }
+                                FilledTonalButton(
+                                    onClick = {
+                                        viewModel.clockOutNow(today) { result ->
+                                            val msg = when (result) {
+                                                ClockOutResult.SUCCESS -> "Clocked out now"
+                                                ClockOutResult.SUCCESS_OVERNIGHT ->
+                                                    HomeOvernightCopy.clockOutOvernightToast(
+                                                        homeClock.openOvernightDate,
+                                                        today
+                                                    )
+                                                ClockOutResult.FAILED ->
+                                                    "Clock in first (or use a different time)"
+                                                ClockOutResult.ALREADY_CLOSED ->
+                                                    "Today is already clocked out — edit the day to change it"
+                                            }
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    enabled = homeClock.clockOutEnabled && !clockBusy,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        "Clock out now",
+                                        maxLines = 2,
+                                        softWrap = true
+                                    )
+                                }
+                            }
+                            Text(
+                                HomeOvernightCopy.clockOutHelper(
+                                    homeClock.overnightPending,
+                                    homeClock.openOvernightDate,
+                                    today
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                            if (homeClock.clockOutEnabled) {
+                                TextButton(
+                                    onClick = { showForgotClockOut = true },
+                                    enabled = !clockBusy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "Forgot to clock out…",
+                                        maxLines = 2,
+                                        softWrap = true
+                                    )
+                                }
+                            }
+                            // 1.3.22: navigate to Entry(today) only — does not punch lunch/break.
+                            FilledTonalButton(
+                                onClick = onLogLunch,
+                                enabled = !clockBusy,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 8.dp)
+                                    .padding(top = 10.dp)
+                                    .semantics {
+                                        contentDescription = "Open Entry to log lunch or break"
+                                    }
                             ) {
                                 Text(
-                                    "An open shift is still unfinished. Clock out finishes it, or use Clock in for options.",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                    "Log lunch / break…",
+                                    maxLines = 2,
+                                    softWrap = true
                                 )
                             }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                            Text(
+                                "Breaks stay on Entry — unpaid by default.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant
+                            )
+                            Text(
+                                "Or set today's times",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            HomeClockTimeRow(
+                                label = "Clock in",
+                                minutes = homeInMinutes,
+                                onPick = { homePickerField = HomeClockField.IN }
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            HomeClockTimeRow(
+                                label = "Clock out",
+                                minutes = homeOutMinutes,
+                                onPick = { homePickerField = HomeClockField.OUT }
+                            )
+                            Spacer(Modifier.height(8.dp))
                             Button(
-                                onClick = {
-                                    if (homeClock.overnightPending) {
-                                        showOvernightDialog = true
-                                        return@Button
-                                    }
-                                    viewModel.clockInNow(today) { result ->
-                                        when (result) {
-                                            ClockInResult.BLOCKED_OVERNIGHT -> {
-                                                showOvernightDialog = true
-                                            }
-                                            ClockInResult.STARTED -> {
-                                                Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
-                                            }
-                                            ClockInResult.ALREADY_OPEN -> {
-                                                Toast.makeText(context, "Already clocked in", Toast.LENGTH_SHORT).show()
-                                            }
-                                            ClockInResult.ALREADY_CLOSED -> {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Today already has hours — edit the day to change it",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        }
-                                    }
-                                },
-                                enabled = homeClock.clockInEnabled && !clockBusy,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Clock in now")
-                            }
-                            FilledTonalButton(
-                                onClick = {
-                                    viewModel.clockOutNow(today) { result ->
-                                        val msg = when (result) {
-                                            ClockOutResult.SUCCESS -> "Clocked out now"
-                                            ClockOutResult.SUCCESS_OVERNIGHT ->
-                                                HomeOvernightCopy.clockOutOvernightToast(
-                                                    homeClock.openOvernightDate,
-                                                    today
-                                                )
-                                            ClockOutResult.FAILED ->
-                                                "Clock in first (or use a different time)"
-                                            ClockOutResult.ALREADY_CLOSED ->
-                                                "Today is already clocked out — edit the day to change it"
-                                        }
-                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                enabled = homeClock.clockOutEnabled && !clockBusy,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Clock out now")
-                            }
-                        }
-                        Text(
-                            HomeOvernightCopy.clockOutHelper(
-                                homeClock.overnightPending,
-                                homeClock.openOvernightDate,
-                                today
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                        if (homeClock.clockOutEnabled) {
-                            TextButton(
-                                onClick = { showForgotClockOut = true },
-                                enabled = !clockBusy,
+                                onClick = { tryHomeManualSave() },
+                                enabled = HomeManualTimes.canSave(homeInMinutes, homeOutMinutes) && !clockBusy,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Forgot to clock out…")
+                                Text(
+                                    "Save today's times",
+                                    maxLines = 2,
+                                    softWrap = true
+                                )
                             }
+                            Text(
+                                "Same save rules as Edit day (overnight guards). Existing break kept; edit day to change.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
                         }
-                        // 1.3.22: navigate to Entry(today) only — does not punch lunch/break.
-                        FilledTonalButton(
-                            onClick = onLogLunch,
-                            enabled = !clockBusy,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 10.dp)
-                                .semantics {
-                                    contentDescription = "Open Entry to log lunch or break"
-                                }
-                        ) {
-                            Text("Log lunch / break…")
-                        }
-                        Text(
-                            "Breaks stay on Entry — unpaid by default.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 12.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        Text(
-                            "Or set today's times",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        HomeClockTimeRow(
-                            label = "Clock in",
-                            minutes = homeInMinutes,
-                            onPick = { homePickerField = HomeClockField.IN }
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        HomeClockTimeRow(
-                            label = "Clock out",
-                            minutes = homeOutMinutes,
-                            onPick = { homePickerField = HomeClockField.OUT }
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Button(
-                            onClick = { tryHomeManualSave() },
-                            enabled = HomeManualTimes.canSave(homeInMinutes, homeOutMinutes) && !clockBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Save today's times")
-                        }
-                        Text(
-                            "Same save rules as Edit day (overnight guards). Existing break kept; edit day to change.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            item { Spacer(Modifier.height(16.dp)) }
 
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(daysInWeek) { date ->
-                    val entry = viewModel.entryFor(date, entries)
-                    val fullLabel = HoursCalc.formatDayLabel(
-                        entry?.clockInMinutes,
-                        entry?.clockOutMinutes,
-                        entry?.lunchOutMinutes,
-                        entry?.lunchInMinutes,
-                        entry?.breakDurationMinutes
-                    )
-                    val partialLabel = when {
-                        fullLabel != null -> fullLabel
-                        entry?.clockInMinutes != null ->
-                            "In ${HoursCalc.formatClock(entry.clockInMinutes!!)}"
-                        else -> null
-                    }
-                    DayRow(
-                        date = date,
-                        hours = entry?.hoursWorked,
-                        clockLabel = partialLabel,
-                        hasEntry = entry != null,
-                        comments = entry?.comments,
-                        isToday = date == today,
-                        onClick = { onDayClick(date) }
-                    )
-                    Spacer(Modifier.height(8.dp))
+            items(daysInWeek) { date ->
+                val entry = viewModel.entryFor(date, entries)
+                val fullLabel = HoursCalc.formatDayLabel(
+                    entry?.clockInMinutes,
+                    entry?.clockOutMinutes,
+                    entry?.lunchOutMinutes,
+                    entry?.lunchInMinutes,
+                    entry?.breakDurationMinutes
+                )
+                val partialLabel = when {
+                    fullLabel != null -> fullLabel
+                    entry?.clockInMinutes != null ->
+                        "In ${HoursCalc.formatClock(entry.clockInMinutes!!)}"
+                    else -> null
                 }
+                DayRow(
+                    date = date,
+                    hours = entry?.hoursWorked,
+                    clockLabel = partialLabel,
+                    hasEntry = entry != null,
+                    comments = entry?.comments,
+                    isToday = date == today,
+                    onClick = { onDayClick(date) }
+                )
+                Spacer(Modifier.height(8.dp))
             }
 
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = onViewLog, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.History, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("History")
+            item {
+                // Flush bottom: History sits just under day list (no weight filler / extra gap).
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onViewLog, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.History, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "History",
+                        maxLines = 1,
+                        softWrap = true
+                    )
+                }
             }
         }
+
     }
 
     if (showOvernightDialog) {
@@ -721,7 +752,9 @@ private fun HomeClockTimeRow(
         Icon(Icons.Filled.Schedule, contentDescription = null)
         Spacer(Modifier.width(8.dp))
         Text(
-            if (minutes == null) label else "$label  ${HoursCalc.formatClock(minutes)}"
+            if (minutes == null) label else "$label  ${HoursCalc.formatClock(minutes)}",
+            maxLines = 2,
+            softWrap = true
         )
     }
 }

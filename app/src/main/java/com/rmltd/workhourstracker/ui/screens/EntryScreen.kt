@@ -288,7 +288,7 @@ fun EntryScreen(
                     ) {
                         Icon(Icons.Filled.Mic, contentDescription = "Speak whole shift")
                         Spacer(Modifier.width(8.dp))
-                        Text("Speak whole shift")
+                        Text("Speak whole shift", maxLines = 2, softWrap = true)
                     }
                     Text(
                         "One utterance can fill clock in, lunch, and clock out. Per-field mics still work below.",
@@ -478,7 +478,11 @@ fun EntryScreen(
                     clockInMinutes != clockOutMinutes,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (clockBusy) "Saving…" else "Save")
+                Text(
+                    if (clockBusy) "Saving…" else "Save",
+                    maxLines = 1,
+                    softWrap = true
+                )
             }
         }
     }

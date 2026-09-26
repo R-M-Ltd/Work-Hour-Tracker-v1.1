@@ -241,7 +241,7 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Save weekly goal")
+                        Text("Save weekly goal", maxLines = 2, softWrap = true)
                     }
                 }
             }
@@ -301,7 +301,7 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Save hourly rate")
+                        Text("Save hourly rate", maxLines = 2, softWrap = true)
                     }
                 }
             }
@@ -351,7 +351,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         val (hour, minute) = reminderTime
-                        Text("Reminder time: ${HoursCalc.formatClock(hour * 60 + minute)}")
+                        Text("Reminder time: ${HoursCalc.formatClock(hour * 60 + minute)}", maxLines = 2, softWrap = true)
                     }
                 }
             }
@@ -400,7 +400,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         val (hour, minute) = endOfDayTime
-                        Text("Cutoff time: ${HoursCalc.formatClock(hour * 60 + minute)}")
+                        Text("Cutoff time: ${HoursCalc.formatClock(hour * 60 + minute)}", maxLines = 2, softWrap = true)
                     }
                 }
             }
@@ -439,14 +439,14 @@ fun SettingsScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Allow notifications")
+                                Text("Allow notifications", maxLines = 2, softWrap = true)
                             }
                         }
                         OutlinedButton(
                             onClick = { ReminderScheduler.openAppNotificationSettings(context) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Open notification settings")
+                            Text("Open notification settings", maxLines = 2, softWrap = true)
                         }
                     }
                 }
@@ -473,7 +473,7 @@ fun SettingsScreen(
                             onClick = { ReminderScheduler.openExactAlarmSettings(context) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Allow exact alarms")
+                            Text("Allow exact alarms", maxLines = 2, softWrap = true)
                         }
                     }
                 }
@@ -581,7 +581,7 @@ fun SettingsScreen(
                             enabled = !backupBusy,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Export CSV…")
+                            Text("Export CSV…", maxLines = 2, softWrap = true)
                         }
                         DropdownMenu(
                             expanded = showSettingsExportMenu,
@@ -711,7 +711,7 @@ fun SettingsScreen(
                         enabled = !backupBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (backupBusy) "Working…" else "Backup / share file")
+                        Text(if (backupBusy) "Working…" else "Backup / share file", maxLines = 2, softWrap = true)
                     }
                     OutlinedButton(
                         onClick = {
@@ -720,7 +720,7 @@ fun SettingsScreen(
                         enabled = !backupBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Restore from file…")
+                        Text("Restore from file…", maxLines = 2, softWrap = true)
                     }
                 }
             }
@@ -963,7 +963,7 @@ fun SettingsScreen(
                             }
                         }
                     }
-                ) { Text("Replace and restore") }
+                ) { Text("Replace and restore", maxLines = 2, softWrap = true) }
             },
             dismissButton = {
                 TextButton(

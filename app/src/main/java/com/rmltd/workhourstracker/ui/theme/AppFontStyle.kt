@@ -8,24 +8,24 @@ import androidx.compose.ui.text.font.FontFamily
  * Uses platform [FontFamily] constants (no bundled font files).
  * Stable [key] values are persisted in SharedPreferences; [displayName] is Settings UI copy.
  * Default is [DEFAULT] (Material / system default look).
+ * Unknown backup/pref keys fall back to [DEFAULT] via [fromKey].
  *
- * Options:
- * - Default — Material default / system UI font
- * - Sans Serif — [FontFamily.SansSerif]
- * - Serif — [FontFamily.Serif]
- * - Monospace — [FontFamily.Monospace]
+ * Options map 1:1 to Compose platform generics (Default, SansSerif, Serif, Monospace, Cursive).
+ * No invented / fake font labels — those five are the available constants.
  */
 enum class AppFontStyle(val key: String, val displayName: String) {
     DEFAULT("default", "Default"),
     SANS_SERIF("sans_serif", "Sans Serif"),
     SERIF("serif", "Serif"),
-    MONOSPACE("monospace", "Monospace");
+    MONOSPACE("monospace", "Monospace"),
+    CURSIVE("cursive", "Cursive");
 
     fun toFontFamily(): FontFamily = when (this) {
         DEFAULT -> FontFamily.Default
         SANS_SERIF -> FontFamily.SansSerif
         SERIF -> FontFamily.Serif
         MONOSPACE -> FontFamily.Monospace
+        CURSIVE -> FontFamily.Cursive
     }
 
     companion object {

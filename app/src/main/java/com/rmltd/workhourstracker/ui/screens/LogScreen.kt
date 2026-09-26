@@ -157,89 +157,106 @@ fun LogScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    Text(
-                        "Total hours to date",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        formatHours(allTimeTotal),
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    allTimePayEstimate?.let { pay ->
-                        Spacer(Modifier.height(4.dp))
+        // Single LazyColumn so History scrolls fully (header + list), no fixed empty gap.
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(20.dp)) {
                         Text(
-                            "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.92f)
+                            "Total hours to date",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            formatHours(allTimeTotal),
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        allTimePayEstimate?.let { pay ->
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.92f)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        Text(
+                            "Sum of all logged days (including this week). " +
+                                "Archived weeks with hours are listed below; empty weeks are hidden. " +
+                                "Tap a day to edit times, or edit its note. Share exports CSV for a week or range.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                        )
                     }
-                    Text(
-                        "Sum of all logged days (including this week). " +
-                            "Archived weeks with hours are listed below; empty weeks are hidden. " +
-                            "Tap a day to edit times, or edit its note. Share exports CSV for a week or range.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                    )
                 }
             }
 
-            OutlinedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+            item {
+                OutlinedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        label = { Text("Search notes") },
-                        placeholder = { Text("Filter by note text or date") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedButton(
-                        onClick = { showAddMissed = true },
-                        modifier = Modifier.fillMaxWidth()
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Add missed punch")
-                        Spacer(Modifier.width(8.dp))
-                        Text("Add missed punch")
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            label = { Text("Search notes") },
+                            placeholder = { Text("Filter by note text or date") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedButton(
+                            onClick = { showAddMissed = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Add missed punch")
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Add missed punch",
+                                maxLines = 2,
+                                softWrap = true
+                            )
+                        }
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
 
             if (searchQuery.trim().isNotEmpty()) {
                 if (searchMatches.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No notes match “${searchQuery.trim()}”.")
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No notes match “${searchQuery.trim()}”.")
+                        }
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp)
-                    ) {
-                        items(searchMatches, key = { it.dateEpochDay }) { entry ->
+                    items(searchMatches, key = { it.dateEpochDay }) { entry ->
+                        Box(Modifier.padding(horizontal = 16.dp)) {
                             SearchResultRow(
                                 entry = entry,
                                 onEditDay = onEditDay,
@@ -249,16 +266,19 @@ fun LogScreen(
                     }
                 }
             } else if (weekLogs.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No completed weeks with hours yet.")
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No completed weeks with hours yet.")
+                    }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(weekLogs) { log ->
+                items(weekLogs) { log ->
+                    Box(Modifier.padding(horizontal = 16.dp)) {
                         WeekLogRow(
                             log = log,
                             viewModel = viewModel,
@@ -269,6 +289,7 @@ fun LogScreen(
                 }
             }
         }
+
     }
 
     if (showAddMissed) {

@@ -18,7 +18,8 @@ import androidx.compose.ui.text.TextStyle
  * Color themes for Work Hours Tracker.
  *
  * Palette hexes are design-locked from theme-mockups/palettes.json (approved as-is).
- * Keys: purple | blue | red | green | orange. Default: purple.
+ * Keys: purple | blue | red | green | orange | aqua. Default: purple.
+ * Aqua is shipped (not in locked palettes.json); locked hexes for the five originals are unchanged.
  * Roles listed in that JSON are applied exactly; remaining Material3 on-color and variant roles
  * are neutral complements so ColorScheme is complete (not alternate brand colors).
  */
@@ -31,6 +32,7 @@ fun AppTheme.previewPrimary(): Color = when (this) {
     AppTheme.RED -> Color(0xFFC62828)
     AppTheme.GREEN -> Color(0xFF2E7D4F)
     AppTheme.ORANGE -> Color(0xFFE65100)
+    AppTheme.AQUA -> Color(0xFF00838F)
 }
 
 // --- Purple (default; polished) ---
@@ -268,12 +270,61 @@ private val OrangeDark = darkColorScheme(
     outlineVariant = Color(0xFF52443C)
 )
 
+
+// --- Aqua (shipped teal-aqua; not in locked palettes.json) ---
+private val AquaLight = lightColorScheme(
+    primary = Color(0xFF00838F),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFB2EBF2),
+    onPrimaryContainer = Color(0xFF00363A),
+    secondary = Color(0xFF4A6366),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFCCE8EB),
+    onSecondaryContainer = Color(0xFF051F22),
+    tertiary = Color(0xFF51606F),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFD4E4F6),
+    onTertiaryContainer = Color(0xFF0D1D2A),
+    background = Color(0xFFF4FAFB),
+    onBackground = Color(0xFF161D1E),
+    surface = Color(0xFFF4FAFB),
+    onSurface = Color(0xFF161D1E),
+    surfaceVariant = Color(0xFFDAE4E6),
+    onSurfaceVariant = Color(0xFF3F484A),
+    outline = Color(0xFF6F797A),
+    outlineVariant = Color(0xFFBEC8CA)
+)
+
+private val AquaDark = darkColorScheme(
+    primary = Color(0xFF4DD0E1),
+    onPrimary = Color(0xFF00363A),
+    primaryContainer = Color(0xFF006064),
+    onPrimaryContainer = Color(0xFFB2EBF2),
+    secondary = Color(0xFFB0CCCF),
+    onSecondary = Color(0xFF1C3437),
+    secondaryContainer = Color(0xFF334B4E),
+    onSecondaryContainer = Color(0xFFCCE8EB),
+    tertiary = Color(0xFFB8C8D8),
+    onTertiary = Color(0xFF233240),
+    tertiaryContainer = Color(0xFF394857),
+    onTertiaryContainer = Color(0xFFD4E4F6),
+    background = Color(0xFF0E1415),
+    onBackground = Color(0xFFDEE3E4),
+    surface = Color(0xFF0E1415),
+    onSurface = Color(0xFFDEE3E4),
+    surfaceVariant = Color(0xFF3F484A),
+    onSurfaceVariant = Color(0xFFBEC8CA),
+    outline = Color(0xFF899294),
+    outlineVariant = Color(0xFF3F484A)
+)
+
 fun colorSchemeFor(theme: AppTheme, darkTheme: Boolean): ColorScheme = when (theme) {
     AppTheme.PURPLE -> if (darkTheme) PurpleDark else PurpleLight
     AppTheme.BLUE -> if (darkTheme) BlueDark else BlueLight
     AppTheme.RED -> if (darkTheme) RedDark else RedLight
     AppTheme.GREEN -> if (darkTheme) GreenDark else GreenLight
     AppTheme.ORANGE -> if (darkTheme) OrangeDark else OrangeLight
+    AppTheme.AQUA -> if (darkTheme) AquaDark else AquaLight
 }
 
 /** Apply [fontFamily] to every role of the Material3 default [Typography]. */

@@ -3,6 +3,21 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.24] — versionCode 26
+
+Appearance + layout polish:
+
+- **Home leftover gap:** Replaced Column + weighted LazyColumn + trailing spacer with a **single LazyColumn** (week strip, Today card, day rows, History). Removes the empty weight filler / bottom spacer gap so content sits flush above the screen bottom.
+- **Vertical scroll:** Home and History/Log now scroll the full page via LazyColumn. Entry and Settings already used `verticalScroll` (unchanged).
+- **Font styles:** Added **Cursive** (`FontFamily.Cursive`). Platform Compose generics are only Default / Sans Serif / Serif / Monospace / Cursive — no invented fonts. Settings radios + ThemePreferences + BackupCodec `fromKey` fall back to Default for unknown keys. Unit tests cover the new key.
+- **Color Aqua:** New `AppTheme.AQUA` (key `aqua`). Not in locked theme-mockups pack — sensible teal-aqua set:
+  - Light primary `#00838F`, primaryContainer `#B2EBF2`, secondary `#4A6366` / `#CCE8EB`, tertiary `#51606F` / `#D4E4F6`, surface `#F4FAFB`
+  - Dark primary `#4DD0E1`, primaryContainer `#006064`, secondary `#B0CCCF` / `#334B4E`, tertiary `#B8C8D8` / `#394857`, surface `#0E1415`
+  - Settings Color radios/chips via `AppTheme.entries` + `previewPrimary()` / `colorSchemeFor()`. Widget stays default purple.
+- **Button labels:** Home / Entry / History / Settings buttons and ClockTimeRow / HomeClockTimeRow use `maxLines` + `softWrap` so labels are not clipped.
+- Locked Purple/Blue/Red/Green/Orange hexes unchanged. Ivan Home CTA / 1.3.21 perf / 1.3.23 Entry scroll / Phase A–D / EOD / paid-break / widget IDs kept.
+- Version 1.3.24 / versionCode 26.
+
 ## [1.3.23] — versionCode 25
 
 Layout fix for Entry Break buttons clipped at the bottom:
