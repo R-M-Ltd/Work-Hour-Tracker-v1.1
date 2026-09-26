@@ -36,7 +36,8 @@ fun AppNavHost(
                 viewModel = viewModel,
                 onDayClick = { date -> navController.navigate(Routes.entry(date)) },
                 onViewLog = { navController.navigate(Routes.LOG) },
-                onSettings = { navController.navigate(Routes.SETTINGS) }
+                onSettings = { navController.navigate(Routes.SETTINGS) },
+                onLogLunch = { navController.navigate(Routes.entry(LocalDate.now())) }
             )
         }
 

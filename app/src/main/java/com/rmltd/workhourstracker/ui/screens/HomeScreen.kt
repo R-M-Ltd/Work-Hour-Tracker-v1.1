@@ -18,6 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +43,8 @@ fun HomeScreen(
     viewModel: WorkHoursViewModel,
     onDayClick: (LocalDate) -> Unit,
     onViewLog: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onLogLunch: () -> Unit
 ) {
     val context = LocalContext.current
     val entries by viewModel.currentWeekEntries.collectAsState()
@@ -371,6 +374,25 @@ fun HomeScreen(
                                 Text("Forgot to clock out…")
                             }
                         }
+                        // 1.3.22: navigate to Entry(today) only — does not punch lunch/break.
+                        FilledTonalButton(
+                            onClick = onLogLunch,
+                            enabled = !clockBusy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp)
+                                .semantics {
+                                    contentDescription = "Open Entry to log lunch or break"
+                                }
+                        ) {
+                            Text("Log lunch / break…")
+                        }
+                        Text(
+                            "Breaks stay on Entry — unpaid by default.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 12.dp),
                             color = MaterialTheme.colorScheme.outlineVariant

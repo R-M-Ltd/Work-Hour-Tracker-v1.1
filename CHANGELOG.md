@@ -3,6 +3,15 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.22] — versionCode 24
+
+Ivan full-app UI rebuild from `ui-rebuild-1.3.22` design pack (baseline 1.3.21 / `d821a93`; visual language polish `a94ee7d`):
+
+- **Home lunch CTA (product delta):** Today card gets **Log lunch / break…** (`FilledTonalButton`, contentDescription `Open Entry to log lunch or break`) after Clock in/out / Forgot and before the manual-times divider. Navigates to `entry/{today}` only — **does not** punch lunch/break; Start/End lunch stay on Entry. Helper: “Breaks stay on Entry — unpaid by default.”
+- **Surfaces:** Home / Entry / History / Settings / widget chrome already match pack + `a94ee7d` section cards, weekly hero, day-row cards, Settings sections, and widget IDs/chrome — no ViewModel API invent from mockups; theme hexes locked.
+- **Kept from 1.3.21:** `windowBackground` surface tint, single `onAppResume`, IO reminder scheduling.
+- Version 1.3.22 / versionCode 24.
+
 ## [1.3.21] — versionCode 23
 
 Perf / white-flash patch only:
