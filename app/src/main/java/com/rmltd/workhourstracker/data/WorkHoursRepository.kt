@@ -73,7 +73,7 @@ class WorkHoursRepository(
         dao.entryForDateOnce(date.toEpochDay())
 
     /** True when any open punch exists (today, yesterday overnight, or older orphan). */
-    suspend fun isStillClockedIn(today: LocalDate = LocalDate.now()): Boolean {
+    suspend fun isStillClockedIn(): Boolean {
         val open = dao.findOpenEntry() ?: return false
         return open.clockInMinutes != null && open.clockOutMinutes == null
     }

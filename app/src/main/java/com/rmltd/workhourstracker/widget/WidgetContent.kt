@@ -22,7 +22,7 @@ object WidgetContent {
     )
 
     /**
-     * @param overnightPending yesterday still open with no out
+     * @param overnightPending any other-day open punch (yesterday overnight or older orphan)
      * @param weekHours sum of current-week [DailyEntry.hoursWorked]
      * @param weekGoalHours Settings weekly goal
      */

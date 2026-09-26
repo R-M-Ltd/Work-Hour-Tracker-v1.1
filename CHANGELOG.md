@@ -3,6 +3,18 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.19] — versionCode 21
+
+Findings polish after 1.3.18 review:
+
+- **Home overnight copy (M):** Clock-out toast and "Clock out now" helper use the actual open date / neutral "open overnight" wording when the open punch is older than yesterday (dialog path already branched). Pure `HomeOvernightCopy` + JVM tests.
+- **EOD Extend (M):** `ACTION_EXTEND` cancels `cancelEndOfDaySameDayRetry` alongside clear-fired/snooze so a fail-closed retry cannot race the snooze notify.
+- **WidgetContent KDoc (L):** `overnightPending` documents any other-day open (not only yesterday).
+- **isStillClockedIn (L):** Dropped unused `today` param; behavior unchanged (any open punch).
+- **Weekly reset widget (L):** `WeeklyResetReceiver` no longer refreshes before archive; `WeeklyResetWorker` refreshes after `catchUpWeekArchives` (BootReceiver early refresh kept).
+- **Settings Color helper (L):** Expanded Color copy matches palette radios/rows ("Choose a palette…"); collapsed copy unchanged.
+- Version 1.3.19 / versionCode 21.
+
 ## [1.3.18] — versionCode 20
 
 Findings polish after 1.3.17 review:

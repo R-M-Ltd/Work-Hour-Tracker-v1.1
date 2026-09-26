@@ -26,6 +26,7 @@ import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.util.HomeManualTimes
+import com.rmltd.workhourstracker.util.HomeOvernightCopy
 import com.rmltd.workhourstracker.util.PayEstimate
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
@@ -331,7 +332,10 @@ fun HomeScreen(
                                         val msg = when (result) {
                                             ClockOutResult.SUCCESS -> "Clocked out now"
                                             ClockOutResult.SUCCESS_OVERNIGHT ->
-                                                "Finished yesterday's overnight shift"
+                                                HomeOvernightCopy.clockOutOvernightToast(
+                                                    homeClock.openOvernightDate,
+                                                    today
+                                                )
                                             ClockOutResult.FAILED ->
                                                 "Clock in first (or use a different time)"
                                             ClockOutResult.ALREADY_CLOSED ->
@@ -347,7 +351,11 @@ fun HomeScreen(
                             }
                         }
                         Text(
-                            "Sets time to now (or finishes yesterday's overnight). Break/lunch: edit the day.",
+                            HomeOvernightCopy.clockOutHelper(
+                                homeClock.overnightPending,
+                                homeClock.openOvernightDate,
+                                today
+                            ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp)

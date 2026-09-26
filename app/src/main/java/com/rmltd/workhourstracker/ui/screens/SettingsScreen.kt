@@ -502,7 +502,7 @@ fun SettingsScreen(
                     )
                     Text(
                         if (colorSectionExpanded) {
-                            "Light/dark still follows the system setting. Pick a radio below, or tap Color to hide palettes."
+                            "Light/dark still follows the system setting. Choose a palette below, or tap Color to hide."
                         } else {
                             "Light/dark still follows the system setting. Tap Color to expand and choose a palette."
                         },

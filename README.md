@@ -4,7 +4,7 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.18 (versionCode 20)
+**Version:** 1.3.19 (versionCode 21)
 
 See [CHANGELOG.md](CHANGELOG.md) for shipped 1.3.x notes.
 

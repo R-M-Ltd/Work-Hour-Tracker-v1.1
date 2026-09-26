@@ -83,7 +83,9 @@ class EndOfDayActionReceiver : BroadcastReceiver() {
             }
             ACTION_EXTEND -> {
                 // Snooze 1 hour; allow another notification after snooze.
+                // Cancel any fail-closed same-day retry so it cannot race the snooze notify.
                 ReminderPreferences.clearEndOfDayFired(context)
+                ReminderScheduler.cancelEndOfDaySameDayRetry(context)
                 val until = System.currentTimeMillis() + EXTEND_MILLIS
                 ReminderPreferences.setEndOfDaySnoozeUntilMillis(context, until)
                 ReminderScheduler.scheduleEndOfDaySnooze(context, until)

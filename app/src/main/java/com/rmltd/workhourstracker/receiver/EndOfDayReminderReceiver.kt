@@ -50,7 +50,7 @@ class EndOfDayReminderReceiver : BroadcastReceiver() {
 
                 val app = context.applicationContext as? WorkHoursApplication
                 val open = runCatching {
-                    app?.repository?.isStillClockedIn(LocalDate.now()) == true
+                    app?.repository?.isStillClockedIn() == true
                 }.getOrElse {
                     // Treat repository failure like outer catch: fail closed + retry.
                     throw it
