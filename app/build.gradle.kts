@@ -12,8 +12,8 @@ android {
         applicationId = "com.rmltd.workhourstracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.3.17"
+        versionCode = 20
+        versionName = "1.3.18"
     }
 
     buildFeatures {

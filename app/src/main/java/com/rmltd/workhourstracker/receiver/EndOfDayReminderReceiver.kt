@@ -21,25 +21,29 @@ import java.time.LocalDate
 /**
  * End-of-day reminder: fires once when still clocked in past the user cutoff.
  * Actions: Clock out (now) or Extend (snooze 1 hour). Always re-arms the next
- * scheduled cutoff (or snooze one-shot).
+ * scheduled cutoff (or snooze one-shot). On check failure: fail-closed on notify,
+ * schedule a short same-day retry without marking fired.
  */
 class EndOfDayReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val pendingResult = goAsync()
         val isSnooze = intent.getBooleanExtra(EXTRA_SNOOZE_FIRE, false)
+        val isRetry = intent.getBooleanExtra(EXTRA_RETRY_FIRE, false)
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (!ReminderPreferences.isEndOfDayEnabled(context)) {
                     ReminderScheduler.cancelEndOfDayReminder(context)
+                    ReminderScheduler.cancelEndOfDaySameDayRetry(context)
                     return@launch
                 }
 
                 val today = LocalDate.now().toEpochDay()
                 val alreadyFiredToday =
                     ReminderPreferences.getEndOfDayFiredEpochDay(context) == today
-                if (alreadyFiredToday && !isSnooze) {
+                // Snooze / same-day retry may notify again; regular cutoff is once per day.
+                if (alreadyFiredToday && !isSnooze && !isRetry) {
                     ReminderScheduler.scheduleEndOfDayReminder(context)
                     return@launch
                 }
@@ -47,22 +51,30 @@ class EndOfDayReminderReceiver : BroadcastReceiver() {
                 val app = context.applicationContext as? WorkHoursApplication
                 val open = runCatching {
                     app?.repository?.isStillClockedIn(LocalDate.now()) == true
-                }.getOrDefault(false)
+                }.getOrElse {
+                    // Treat repository failure like outer catch: fail closed + retry.
+                    throw it
+                }
 
                 if (open) {
                     ReminderPreferences.markEndOfDayFired(context, today)
                     ReminderPreferences.clearEndOfDaySnooze(context)
+                    ReminderScheduler.cancelEndOfDaySameDayRetry(context)
                     showNotification(context)
                 }
 
                 // Re-arm next cutoff (snooze path schedules its own one-shot separately).
-                if (!isSnooze) {
+                if (!isSnooze && !isRetry) {
                     ReminderScheduler.scheduleEndOfDayReminder(context)
                 }
             } catch (_: Exception) {
-                // Fail closed: do not show "Still clocked in" when open state is unknown.
-                // Re-arm only; leave fired stamp alone so a later successful check can notify.
-                ReminderScheduler.scheduleEndOfDayReminder(context)
+                // Fail closed on notify: never show "Still clocked in" when open
+                // state is unknown. Do NOT mark fired. Schedule a short same-day
+                // one-shot retry, and re-arm the next cutoff for the regular path.
+                ReminderScheduler.scheduleEndOfDaySameDayRetry(context)
+                if (!isSnooze && !isRetry) {
+                    ReminderScheduler.scheduleEndOfDayReminder(context)
+                }
             } finally {
                 pendingResult.finish()
             }
@@ -124,5 +136,6 @@ class EndOfDayReminderReceiver : BroadcastReceiver() {
         const val CHANNEL_ID = "end_of_day_reminder"
         const val NOTIFICATION_ID = 2002
         const val EXTRA_SNOOZE_FIRE = "snooze_fire"
+        const val EXTRA_RETRY_FIRE = "retry_fire"
     }
 }

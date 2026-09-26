@@ -36,7 +36,14 @@ object CsvExporter {
                 sb.append(csvClock(entry.lunchOutMinutes)).append(',')
                 sb.append(csvClock(entry.lunchInMinutes)).append(',')
                 sb.append(entry.breakDurationMinutes?.toString().orEmpty()).append(',')
-                sb.append(if (entry.breakPaid) "true" else "false").append(',')
+                // Omit false noise when no duration — blank means N/A.
+                sb.append(
+                    when {
+                        entry.breakDurationMinutes == null -> ""
+                        entry.breakPaid -> "true"
+                        else -> "false"
+                    }
+                ).append(',')
                 sb.append("%.2f".format(java.util.Locale.US, entry.hoursWorked)).append(',')
                 sb.append(csvEscape(entry.comments))
                 sb.appendLine()

@@ -33,6 +33,10 @@ object ReminderScheduler {
     private const val REQUEST_WEEKLY = 1002
     private const val REQUEST_END_OF_DAY = 1003
     private const val REQUEST_END_OF_DAY_SNOOZE = 1004
+    private const val REQUEST_END_OF_DAY_RETRY = 1005
+
+    /** Default delay for same-day fail-closed retry after an EOD check error. */
+    const val END_OF_DAY_RETRY_DELAY_MILLIS = 15L * 60L * 1000L
 
     fun scheduleDailyReminder(context: Context, from: LocalDateTime = LocalDateTime.now()) {
         if (!ReminderPreferences.isReminderEnabled(context)) {
@@ -54,6 +58,7 @@ object ReminderScheduler {
         if (!ReminderPreferences.isEndOfDayEnabled(context)) {
             cancelEndOfDayReminder(context)
             cancelEndOfDaySnooze(context)
+            cancelEndOfDaySameDayRetry(context)
             return
         }
         // If a snooze is still in the future, keep the snooze alarm instead.
@@ -100,6 +105,48 @@ object ReminderScheduler {
         val pi = PendingIntent.getBroadcast(
             context,
             REQUEST_END_OF_DAY_SNOOZE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pi)
+    }
+
+    /**
+     * Short same-day one-shot after a fail-closed EOD check error.
+     * Does not mark fired; receiver keeps fail-closed on notify.
+     * No-ops if the retry would land after local midnight (next cutoff covers it).
+     */
+    fun scheduleEndOfDaySameDayRetry(
+        context: Context,
+        delayMillis: Long = END_OF_DAY_RETRY_DELAY_MILLIS
+    ) {
+        if (!ReminderPreferences.isEndOfDayEnabled(context)) {
+            cancelEndOfDaySameDayRetry(context)
+            return
+        }
+        val until = System.currentTimeMillis() + delayMillis
+        val at = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(until),
+            ZoneId.systemDefault()
+        )
+        if (at.toLocalDate() != LocalDateTime.now().toLocalDate()) {
+            cancelEndOfDaySameDayRetry(context)
+            return
+        }
+        val intent = Intent(context, EndOfDayReminderReceiver::class.java).apply {
+            putExtra(EndOfDayReminderReceiver.EXTRA_RETRY_FIRE, true)
+        }
+        scheduleIntent(context, at, intent, REQUEST_END_OF_DAY_RETRY)
+    }
+
+    fun cancelEndOfDaySameDayRetry(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, EndOfDayReminderReceiver::class.java).apply {
+            putExtra(EndOfDayReminderReceiver.EXTRA_RETRY_FIRE, true)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context,
+            REQUEST_END_OF_DAY_RETRY,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

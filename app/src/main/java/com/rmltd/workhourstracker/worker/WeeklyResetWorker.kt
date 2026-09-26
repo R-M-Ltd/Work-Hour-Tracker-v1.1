@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.rmltd.workhourstracker.WorkHoursApplication
+import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 
 /**
  * Triggered by [com.rmltd.workhourstracker.receiver.WeeklyResetReceiver].
@@ -18,6 +19,7 @@ class WeeklyResetWorker(appContext: Context, params: WorkerParameters) :
         return try {
             val repository = (applicationContext as WorkHoursApplication).repository
             repository.catchUpWeekArchives()
+            WorkHoursWidgetUpdater.requestUpdate(applicationContext)
             Result.success()
         } catch (e: Exception) {
             Result.retry()

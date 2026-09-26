@@ -24,8 +24,10 @@ import java.time.LocalDate
  * Builds RemoteViews from Room + prefs and pushes them to all widget instances.
  * Display-only (tap opens [MainActivity] / Home) — no clock actions from the widget.
  *
- * [requestUpdate] is single-flight + generation-gated: overlapping launches cannot
- * apply a stale Room snapshot after a newer refresh has started.
+ * All refresh entry points ([requestUpdate], [updateAppWidgetIds], [updateAllSync])
+ * share one mutex + generation gate: overlapping launches cannot apply a stale
+ * Room snapshot after a newer refresh has started. [isCurrent] is checked after
+ * the Room load and before [AppWidgetManager.updateAppWidget].
  */
 object WorkHoursWidgetUpdater {
 
@@ -40,33 +42,65 @@ object WorkHoursWidgetUpdater {
         val appContext = context.applicationContext
         val token = generation.nextToken()
         scope.launch {
-            updateMutex.withLock {
-                if (!generation.isCurrent(token)) return@withLock
-                runCatching { updateAllSync(appContext) }
+            runCatching {
+                updateMutex.withLock {
+                    applyGated(appContext, token) { manager, ids, views ->
+                        ids.forEach { id -> manager.updateAppWidget(id, views) }
+                    }
+                }
             }
         }
     }
 
-    /** Blocking update for [AppWidgetProvider.onUpdate] (caller holds goAsync). */
+    /**
+     * Blocking update for [AppWidgetProvider.onUpdate] (caller holds goAsync).
+     * Uses the same mutex + generation gate as [requestUpdate].
+     */
+    suspend fun updateAppWidgetIds(context: Context, appWidgetIds: IntArray) {
+        if (appWidgetIds.isEmpty()) return
+        val appContext = context.applicationContext
+        val token = generation.nextToken()
+        updateMutex.withLock {
+            applyGated(appContext, token) { manager, _, views ->
+                appWidgetIds.forEach { id -> manager.updateAppWidget(id, views) }
+            }
+        }
+    }
+
+    /** Blocking update of every instance (same gate). Prefer [requestUpdate] from app code. */
     suspend fun updateAllSync(context: Context) {
+        val appContext = context.applicationContext
+        val token = generation.nextToken()
+        updateMutex.withLock {
+            applyGated(appContext, token) { manager, ids, views ->
+                ids.forEach { id -> manager.updateAppWidget(id, views) }
+            }
+        }
+    }
+
+    /**
+     * Inside [updateMutex]: drop if superseded before load; load Room; drop if
+     * superseded after load; otherwise build RemoteViews and invoke [publish].
+     */
+    private suspend fun applyGated(
+        context: Context,
+        token: Long,
+        publish: (AppWidgetManager, IntArray, RemoteViews) -> Unit
+    ) {
+        if (!generation.isCurrent(token)) return
         val manager = AppWidgetManager.getInstance(context)
         val ids = manager.getAppWidgetIds(
             ComponentName(context, WorkHoursWidgetProvider::class.java)
         )
         if (ids.isEmpty()) return
-        val views = buildRemoteViews(context)
-        ids.forEach { id -> manager.updateAppWidget(id, views) }
-    }
-
-    suspend fun updateAppWidgetIds(context: Context, appWidgetIds: IntArray) {
-        if (appWidgetIds.isEmpty()) return
-        val manager = AppWidgetManager.getInstance(context)
-        val views = buildRemoteViews(context)
-        appWidgetIds.forEach { id -> manager.updateAppWidget(id, views) }
-    }
-
-    private suspend fun buildRemoteViews(context: Context): RemoteViews {
         val display = loadDisplay(context)
+        // Critical: re-check AFTER Room load, BEFORE updateAppWidget.
+        if (!generation.isCurrent(token)) return
+        val views = buildRemoteViews(context, display)
+        publish(manager, ids, views)
+    }
+
+    private fun buildRemoteViews(context: Context, display: WidgetContent.Display): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_work_hours)
         views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_title))
         views.setTextViewText(R.id.widget_status, display.statusLine)
@@ -92,11 +126,11 @@ object WorkHoursWidgetUpdater {
         val repo = app?.repository
         val today = LocalDate.now()
         val todayEntry = repo?.entryForDateOnce(today)
-        val yesterdayEntry = repo?.entryForDateOnce(today.minusDays(1))
-        val overnight = ClockDayState.isOvernightOpen(
-            yesterdayEntry?.clockInMinutes,
-            yesterdayEntry?.clockOutMinutes
-        )
+        // Any open punch (not just yesterday) — orphan opens nudge via overnight copy.
+        val openEntry = repo?.findOpenEntryOnce()
+        val overnight = openEntry != null &&
+            openEntry.dateEpochDay != today.toEpochDay() &&
+            ClockDayState.isOvernightOpen(openEntry.clockInMinutes, openEntry.clockOutMinutes)
         val weekStartDay = ReminderPreferences.getWeekStartDay(context)
         val weekStart = WeekUtils.weekStartFor(today, weekStartDay)
         val weekEntries = repo?.entriesForWeekOnce(weekStart).orEmpty()

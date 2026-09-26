@@ -72,13 +72,14 @@ class WorkHoursRepository(
     suspend fun entryForDateOnce(date: LocalDate): DailyEntry? =
         dao.entryForDateOnce(date.toEpochDay())
 
-    /** True when today is open or yesterday still has an overnight open punch. */
+    /** True when any open punch exists (today, yesterday overnight, or older orphan). */
     suspend fun isStillClockedIn(today: LocalDate = LocalDate.now()): Boolean {
-        val todayEntry = dao.entryForDateOnce(today.toEpochDay())
-        if (todayEntry?.clockInMinutes != null && todayEntry.clockOutMinutes == null) return true
-        val yesterday = dao.entryForDateOnce(today.minusDays(1).toEpochDay())
-        return yesterday?.clockInMinutes != null && yesterday.clockOutMinutes == null
+        val open = dao.findOpenEntry() ?: return false
+        return open.clockInMinutes != null && open.clockOutMinutes == null
     }
+
+    /** Latest open punch row, if any (for widget / Home orphan nudge). */
+    suspend fun findOpenEntryOnce(): DailyEntry? = dao.findOpenEntry()
 
     /** Date-scoped Flow — used when Entry navigates outside the configured current week. */
     fun entryForDate(date: LocalDate): Flow<DailyEntry?> =
@@ -87,9 +88,10 @@ class WorkHoursRepository(
     fun homeClockUi(today: LocalDate = LocalDate.now()): Flow<HomeClockUi> =
         combine(
             dao.entryForDate(today.toEpochDay()),
-            dao.entryForDate(today.minusDays(1).toEpochDay())
-        ) { todayEntry, yesterdayEntry ->
-            deriveHomeClockUi(todayEntry, yesterdayEntry)
+            dao.entryForDate(today.minusDays(1).toEpochDay()),
+            dao.observeOpenEntry()
+        ) { todayEntry, yesterdayEntry, openEntry ->
+            deriveHomeClockUi(todayEntry, yesterdayEntry, openEntry)
         }
 
     /**
@@ -199,14 +201,17 @@ class WorkHoursRepository(
     }
 
     /**
-     * Discard yesterday's open overnight (if any) then clock in today.
-     * Single-flight with other clock ops.
+     * Discard any open punch on a different day (yesterday overnight or older
+     * orphan), then clock in on [date]. Single-flight with other clock ops.
      */
     suspend fun discardOvernightAndClockIn(
         date: LocalDate,
         minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
     ): ClockInResult = clockMutex.withLock {
-        discardOpenPunchUnlocked(date.minusDays(1))
+        val open = dao.findOpenEntry()
+        if (open != null && open.dateEpochDay != date.toEpochDay()) {
+            discardOpenPunchUnlocked(LocalDate.ofEpochDay(open.dateEpochDay))
+        }
         clockInNowUnlocked(date, minutes)
     }
 
@@ -256,12 +261,17 @@ class WorkHoursRepository(
     private suspend fun clockInNowUnlocked(date: LocalDate, minutes: Int): ClockInResult {
         val existing = dao.entryForDateOnce(date.toEpochDay())
         val prior = dao.entryForDateOnce(date.minusDays(1).toEpochDay())
+        val open = dao.findOpenEntry()
+        val orphanOpen = open != null &&
+            open.dateEpochDay != date.toEpochDay() &&
+            open.dateEpochDay != date.minusDays(1).toEpochDay()
         val decision = ClockDayState.decideClockIn(
             todayIn = existing?.clockInMinutes,
             todayOut = existing?.clockOutMinutes,
             todayHoursWorked = existing?.hoursWorked ?: 0.0,
             yesterdayIn = prior?.clockInMinutes,
-            yesterdayOut = prior?.clockOutMinutes
+            yesterdayOut = prior?.clockOutMinutes,
+            orphanOpenOnOtherDay = orphanOpen
         )
         if (decision != ClockInResult.STARTED) return decision
 
@@ -299,13 +309,18 @@ class WorkHoursRepository(
         val todayIn = today?.clockInMinutes
         val todayOut = today?.clockOutMinutes
         val priorIn = prior?.clockInMinutes
+        val open = dao.findOpenEntry()
+        val orphanOpen = open != null &&
+            open.dateEpochDay != date.toEpochDay() &&
+            open.dateEpochDay != yesterday.toEpochDay()
 
         val decision = ClockDayState.decideClockOut(
             todayIn = todayIn,
             todayOut = todayOut,
             yesterdayIn = priorIn,
             yesterdayOut = prior?.clockOutMinutes,
-            outMinutes = minutes
+            outMinutes = minutes,
+            orphanOpenOnOtherDay = orphanOpen
         )
         when (decision) {
             ClockOutResult.ALREADY_CLOSED, ClockOutResult.FAILED -> return@withLock decision
@@ -324,19 +339,27 @@ class WorkHoursRepository(
                 refreshWeekArchiveIfPresent(date)
             }
             ClockOutResult.SUCCESS_OVERNIGHT -> {
-                // priorIn non-null by decideClockOut contract; equal wall → 24.00h
+                // Prefer yesterday overnight; else close orphan open on an older day.
+                val target = when {
+                    priorIn != null && prior!!.clockOutMinutes == null -> prior
+                    orphanOpen && open != null -> open
+                    else -> prior
+                }
+                val targetIn = target?.clockInMinutes
+                    ?: return@withLock ClockOutResult.FAILED
+                val targetDate = LocalDate.ofEpochDay(target.dateEpochDay)
                 upsertClosedEntry(
-                    date = yesterday,
-                    clockInMinutes = priorIn!!,
+                    date = targetDate,
+                    clockInMinutes = targetIn,
                     clockOutMinutes = minutes,
-                    comments = prior!!.comments,
-                    lunchOutMinutes = prior.lunchOutMinutes,
-                    lunchInMinutes = prior.lunchInMinutes,
-                    equalOutMeansFullDay = priorIn == minutes,
-                    breakDurationMinutes = prior.breakDurationMinutes,
-                    breakPaid = prior.breakPaid
+                    comments = target.comments,
+                    lunchOutMinutes = target.lunchOutMinutes,
+                    lunchInMinutes = target.lunchInMinutes,
+                    equalOutMeansFullDay = targetIn == minutes,
+                    breakDurationMinutes = target.breakDurationMinutes,
+                    breakPaid = target.breakPaid
                 )
-                refreshWeekArchiveIfPresent(yesterday)
+                refreshWeekArchiveIfPresent(targetDate)
             }
         }
         decision
@@ -479,7 +502,11 @@ class WorkHoursRepository(
 
     companion object {
         /** Delegates to [ClockDayState.deriveHomeClockUi] (kept for call-site stability). */
-        fun deriveHomeClockUi(todayEntry: DailyEntry?, yesterdayEntry: DailyEntry?): HomeClockUi =
-            ClockDayState.deriveHomeClockUi(todayEntry, yesterdayEntry)
+        fun deriveHomeClockUi(
+            todayEntry: DailyEntry?,
+            yesterdayEntry: DailyEntry?,
+            orphanOpenEntry: DailyEntry? = null
+        ): HomeClockUi =
+            ClockDayState.deriveHomeClockUi(todayEntry, yesterdayEntry, orphanOpenEntry)
     }
 }

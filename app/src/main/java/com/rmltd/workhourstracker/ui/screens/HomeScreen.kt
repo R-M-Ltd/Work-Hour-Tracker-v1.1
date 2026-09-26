@@ -284,7 +284,7 @@ fun HomeScreen(
                                     .padding(bottom = 8.dp)
                             ) {
                                 Text(
-                                    "Yesterday's shift is still open. Clock out finishes it, or use Clock in for options.",
+                                    "An open shift is still unfinished. Clock out finishes it, or use Clock in for options.",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
@@ -442,14 +442,21 @@ fun HomeScreen(
     }
 
     if (showOvernightDialog) {
-        val yesterday = homeClock.openOvernightDate ?: today.minusDays(1)
+        val openDay = homeClock.openOvernightDate ?: today.minusDays(1)
+        val isYesterday = openDay == today.minusDays(1)
+        val dayLabel = if (isYesterday) "yesterday" else openDay.toString()
         AlertDialog(
             onDismissRequest = { showOvernightDialog = false },
-            title = { Text("Yesterday's shift is still open") },
+            title = {
+                Text(
+                    if (isYesterday) "Yesterday's shift is still open"
+                    else "Open shift still unfinished"
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Finish the overnight shift, edit yesterday's times, or discard the open punch and clock in today."
+                        "Finish the open shift, edit $dayLabel's times, or discard the open punch and clock in today."
                     )
                     Spacer(Modifier.height(8.dp))
                     TextButton(
@@ -458,10 +465,10 @@ fun HomeScreen(
                             viewModel.clockOutNow(today) { result ->
                                 val msg = when (result) {
                                     ClockOutResult.SUCCESS_OVERNIGHT ->
-                                        "Finished yesterday's overnight shift"
+                                        "Finished open overnight shift"
                                     ClockOutResult.SUCCESS -> "Clocked out now"
                                     ClockOutResult.FAILED ->
-                                        "Could not finish overnight — try editing yesterday"
+                                        "Could not finish open shift — try editing $dayLabel"
                                     ClockOutResult.ALREADY_CLOSED ->
                                         "Today is already clocked out"
                                 }
@@ -473,17 +480,19 @@ fun HomeScreen(
                     TextButton(
                         onClick = {
                             showOvernightDialog = false
-                            onDayClick(yesterday)
+                            onDayClick(openDay)
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Edit yesterday") }
+                    ) {
+                        Text(if (isYesterday) "Edit yesterday" else "Edit open day")
+                    }
                     TextButton(
                         onClick = {
                             showOvernightDialog = false
                             viewModel.discardOvernightAndClockIn(today) { result ->
                                 val msg = when (result) {
                                     ClockInResult.STARTED ->
-                                        "Discarded yesterday's punch and clocked in"
+                                        "Discarded open punch and clocked in"
                                     ClockInResult.ALREADY_OPEN -> "Already clocked in"
                                     ClockInResult.ALREADY_CLOSED ->
                                         "Today already has hours — edit the day"

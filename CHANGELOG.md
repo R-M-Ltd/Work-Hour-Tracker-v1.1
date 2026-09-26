@@ -3,18 +3,32 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.18] — versionCode 20
+
+Findings polish after 1.3.17 review:
+
+- **Widget gate (M-A):** `onUpdate` / `updateAppWidgetIds` / `updateAllSync` share the same mutex + generation as `requestUpdate`; `isCurrent` is checked **after** Room load and **before** `updateAppWidget`. JVM tests cover coalesce/post-load semantics (not counter-only).
+- **Orphan open (M-B):** Clock-in blocks (`BLOCKED_OVERNIGHT`) when `findOpenEntry` is on another day (gap days, not only yesterday). `isStillClockedIn`, widget overnight copy, Home overnight UI, EOD, discard, and clock-out finish any open punch. JVM: open + gap day + later clock-in.
+- **EOD same-day retry (M-C):** Fail-closed catch schedules a short same-day one-shot retry **without** marking fired; notify stays fail-closed. Catch comments corrected.
+- **CSV breakPaid (L1):** Emit blank `breakPaid` when `breakDurationMinutes` is empty (no false noise).
+- **Docs (L2):** CHANGELOG clarifies `formatClock` Locale.US is app-wide (honest; no widget/UI split).
+- **Widget refresh (L3):** `BootReceiver` and weekly archive/reset paths call `WorkHoursWidgetUpdater.requestUpdate`.
+- **EOD action (L4):** `EndOfDayActionReceiver` handles `ClockOutResult` failures (toast + re-notify; no silent success).
+- **Contradictions:** `WidgetUpdateGeneration` KDoc matches post-load gate; 1.3.17 M1 note corrected; EOD catch comment fixed.
+- Version 1.3.18 / versionCode 20.
+
 ## [1.3.17] — versionCode 19
 
 Findings polish after 1.3.16 widget review:
 
-- **Widget race (M1):** `WorkHoursWidgetUpdater.requestUpdate` is single-flight + generation-gated so overlapping launches cannot apply a stale Room snapshot.
+- **Widget race (M1):** `WorkHoursWidgetUpdater.requestUpdate` is single-flight + generation-gated (provider `onUpdate` still bypassed the gate until 1.3.18).
 - **Overnight widget copy (M2/C3):** Status is "Overnight open — open app to finish" (accurate; no fake tap-to-resolve).
 - **EOD catch (M3):** Fail closed — do not show "Still clocked in" when open/clocked-in state is unknown.
 - **Settings CSV date range (C1):** Settings Export CSV matches History (this week / date range / all time).
 - **Color helper (C4):** Collapsed Color section no longer says "pick a radio below".
 - **Theme vs widget (C2):** Settings note — home-screen widget stays default purple and does not follow in-app theme/font.
 - **CSV break columns (L1):** Export includes `breakDurationMinutes` and `breakPaid`.
-- **Widget locales (L2):** `HoursCalc.formatClock` uses Locale.US (same as hours/pay/CSV) for consistent widget clocks.
+- **Locales (L2):** `HoursCalc.formatClock` uses Locale.US app-wide (Home/Entry/Settings/widget/CSV) — not widget-only.
 - **Tests (L3/M4):** Widget overnight + non-EMPTY cases, update-generation sequencing, Entry date-scoped overnight regression.
 - **README (L4):** Version 1.3.17; brief Phases A–D feature mention.
 

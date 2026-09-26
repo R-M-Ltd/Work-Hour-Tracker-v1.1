@@ -53,7 +53,7 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,false,8.50,\n",
+                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,,8.50,\n",
             csv
         )
     }
@@ -76,7 +76,7 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,12:00 PM,12:30 PM,,false,7.50,desk work\n",
+                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,12:00 PM,12:30 PM,,,7.50,desk work\n",
             csv
         )
     }
@@ -94,8 +94,8 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,false,8.00,\"hello, \"\"world\"\"\nnext\"\n" +
-                "2026-09-16,2026-09-18,9:00 AM,5:00 PM,,,,false,8.00,plain\n",
+                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,,8.00,\"hello, \"\"world\"\"\nnext\"\n" +
+                "2026-09-16,2026-09-18,9:00 AM,5:00 PM,,,,,8.00,plain\n",
             csv
         )
     }
@@ -108,7 +108,7 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,false,8.00,\"a\rb\"\n",
+                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,,8.00,\"a\rb\"\n",
             csv
         )
     }
@@ -125,7 +125,7 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-16,2026-09-17,10:00 PM,,,,,false,0.00,\n",
+                "2026-09-16,2026-09-17,10:00 PM,,,,,,0.00,\n",
             csv
         )
     }
@@ -140,9 +140,9 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-16,2026-09-16,9:00 AM,5:00 PM,,,,false,8.00,\n" +
-                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,false,8.00,\n" +
-                "2026-09-16,2026-09-18,9:00 AM,5:00 PM,,,,false,8.00,\n",
+                "2026-09-16,2026-09-16,9:00 AM,5:00 PM,,,,,8.00,\n" +
+                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,,8.00,\n" +
+                "2026-09-16,2026-09-18,9:00 AM,5:00 PM,,,,,8.00,\n",
             csv
         )
     }
@@ -159,8 +159,8 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-09,2026-09-10,9:00 AM,5:00 PM,,,,false,8.00,\n" +
-                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,false,8.00,\n",
+                "2026-09-09,2026-09-10,9:00 AM,5:00 PM,,,,,8.00,\n" +
+                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,,8.00,\n",
             csv
         )
     }
@@ -185,7 +185,7 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-16,2026-09-17,12:00 AM,12:00 PM,,,,false,12.00,\n",
+                "2026-09-16,2026-09-17,12:00 AM,12:00 PM,,,,,12.00,\n",
             csv
         )
     }
@@ -208,7 +208,7 @@ class CsvExporterTest {
         )
         assertEquals(
             "$header\n" +
-                "2026-09-16,2026-09-17,,,,,,false,0.00,\n",
+                "2026-09-16,2026-09-17,,,,,,,0.00,\n",
             csv
         )
     }
@@ -275,6 +275,19 @@ class CsvExporterTest {
             "$header\n" +
                 "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,30,false,7.50,\n" +
                 "2026-09-16,2026-09-18,9:00 AM,5:00 PM,,,15,true,8.00,\n",
+            csv
+        )
+    }
+
+    @Test
+    fun breakPaid_blankWhenNoDuration() {
+        val day = LocalDate.of(2026, 9, 17)
+        val csv = CsvExporter.buildCsv(
+            listOf(weekStart to listOf(entry(day, breakDurationMinutes = null, breakPaid = false)))
+        )
+        assertEquals(
+            "$header\n" +
+                "2026-09-16,2026-09-17,9:00 AM,5:00 PM,,,,,8.00,\n",
             csv
         )
     }

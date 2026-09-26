@@ -29,7 +29,7 @@ object ClockDayState {
         return Kind.EMPTY
     }
 
-    /** Yesterday open with no out → overnight pending. */
+    /** Open punch: in set, out null (overnight, same-day open, or orphan older day). */
     fun isOvernightOpen(clockInMinutes: Int?, clockOutMinutes: Int?): Boolean =
         clockInMinutes != null && clockOutMinutes == null
 
@@ -39,20 +39,23 @@ object ClockDayState {
      *
      * Empty → STARTED (caller upserts). Open/Closed/legacy → no-op results.
      * Empty + yesterday overnight open → BLOCKED_OVERNIGHT.
+     * Empty + [orphanOpenOnOtherDay] (open on a day older than yesterday) →
+     * BLOCKED_OVERNIGHT — never STARTED while an older open remains.
      */
     fun decideClockIn(
         todayIn: Int?,
         todayOut: Int?,
         todayHoursWorked: Double,
         yesterdayIn: Int?,
-        yesterdayOut: Int?
+        yesterdayOut: Int?,
+        orphanOpenOnOtherDay: Boolean = false
     ): ClockInResult {
         when (classify(todayIn, todayOut, todayHoursWorked)) {
             Kind.CLOSED, Kind.LEGACY_CLOSED -> return ClockInResult.ALREADY_CLOSED
             Kind.OPEN -> return ClockInResult.ALREADY_OPEN
             Kind.EMPTY -> Unit
         }
-        if (isOvernightOpen(yesterdayIn, yesterdayOut)) {
+        if (isOvernightOpen(yesterdayIn, yesterdayOut) || orphanOpenOnOtherDay) {
             return ClockInResult.BLOCKED_OVERNIGHT
         }
         return ClockInResult.STARTED
@@ -64,6 +67,7 @@ object ClockDayState {
      *
      * Open today → SUCCESS (caller closes today; equal wall times → FAILED).
      * Empty today + yesterday overnight → SUCCESS_OVERNIGHT (caller closes yesterday).
+     * Empty today + [orphanOpenOnOtherDay] → SUCCESS_OVERNIGHT (caller closes that day).
      * Closed today → ALREADY_CLOSED. Else FAILED.
      */
     fun decideClockOut(
@@ -71,7 +75,8 @@ object ClockDayState {
         todayOut: Int?,
         yesterdayIn: Int?,
         yesterdayOut: Int?,
-        outMinutes: Int
+        outMinutes: Int,
+        orphanOpenOnOtherDay: Boolean = false
     ): ClockOutResult {
         if (todayIn != null && todayOut != null) {
             return ClockOutResult.ALREADY_CLOSED
@@ -81,7 +86,7 @@ object ClockDayState {
             if (todayIn == outMinutes) return ClockOutResult.FAILED
             return ClockOutResult.SUCCESS
         }
-        if (isOvernightOpen(yesterdayIn, yesterdayOut)) {
+        if (isOvernightOpen(yesterdayIn, yesterdayOut) || orphanOpenOnOtherDay) {
             return ClockOutResult.SUCCESS_OVERNIGHT
         }
         return ClockOutResult.FAILED
@@ -90,6 +95,7 @@ object ClockDayState {
     /**
      * Home clock button / overnight UI from punch fields.
      * Overnight-pending keeps clock-in enabled so Home can show the resolve dialog.
+     * [orphanOpenEpochDay] surfaces an open punch older than yesterday.
      */
     fun deriveHomeClockUi(
         todayIn: Int?,
@@ -97,9 +103,11 @@ object ClockDayState {
         todayHoursWorked: Double,
         yesterdayIn: Int?,
         yesterdayOut: Int?,
-        yesterdayEpochDay: Long? = null
+        yesterdayEpochDay: Long? = null,
+        orphanOpenEpochDay: Long? = null
     ): HomeClockUi {
-        val overnightPending = isOvernightOpen(yesterdayIn, yesterdayOut)
+        val yesterdayOvernight = isOvernightOpen(yesterdayIn, yesterdayOut)
+        val overnightPending = yesterdayOvernight || orphanOpenEpochDay != null
         val todayKind = classify(todayIn, todayOut, todayHoursWorked)
         val todayOpen = todayKind == Kind.OPEN
         val todayClosed = todayKind == Kind.CLOSED || todayKind == Kind.LEGACY_CLOSED
@@ -107,26 +115,42 @@ object ClockDayState {
         val clockInEnabled = !todayOpen && !todayClosed
         val clockOutEnabled = todayOpen || overnightPending
 
+        val openDate = when {
+            yesterdayOvernight && yesterdayEpochDay != null ->
+                LocalDate.ofEpochDay(yesterdayEpochDay)
+            orphanOpenEpochDay != null ->
+                LocalDate.ofEpochDay(orphanOpenEpochDay)
+            else -> null
+        }
+
         return HomeClockUi(
             clockInEnabled = clockInEnabled,
             clockOutEnabled = clockOutEnabled,
             overnightPending = overnightPending,
-            openOvernightDate = if (overnightPending && yesterdayEpochDay != null) {
-                LocalDate.ofEpochDay(yesterdayEpochDay)
-            } else {
-                null
-            }
+            openOvernightDate = openDate
         )
     }
 
     /** Convenience over [DailyEntry] rows (Repository Flow / tests). */
-    fun deriveHomeClockUi(todayEntry: DailyEntry?, yesterdayEntry: DailyEntry?): HomeClockUi =
-        deriveHomeClockUi(
+    fun deriveHomeClockUi(
+        todayEntry: DailyEntry?,
+        yesterdayEntry: DailyEntry?,
+        orphanOpenEntry: DailyEntry? = null
+    ): HomeClockUi {
+        val todayEpoch = todayEntry?.dateEpochDay
+        val yesterdayEpoch = yesterdayEntry?.dateEpochDay
+            ?: todayEpoch?.let { it - 1 }
+        val orphanEpoch = orphanOpenEntry?.dateEpochDay?.takeIf { epoch ->
+            epoch != todayEpoch && epoch != yesterdayEpoch
+        }
+        return deriveHomeClockUi(
             todayIn = todayEntry?.clockInMinutes,
             todayOut = todayEntry?.clockOutMinutes,
             todayHoursWorked = todayEntry?.hoursWorked ?: 0.0,
             yesterdayIn = yesterdayEntry?.clockInMinutes,
             yesterdayOut = yesterdayEntry?.clockOutMinutes,
-            yesterdayEpochDay = yesterdayEntry?.dateEpochDay
+            yesterdayEpochDay = yesterdayEntry?.dateEpochDay,
+            orphanOpenEpochDay = orphanEpoch
         )
+    }
 }

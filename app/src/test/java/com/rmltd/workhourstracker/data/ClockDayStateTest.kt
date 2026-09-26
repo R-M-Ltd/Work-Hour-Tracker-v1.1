@@ -108,6 +108,30 @@ class ClockDayStateTest {
     }
 
     @Test
+    fun clockIn_emptyWithOrphanOpenGapDay_blocked() {
+        // Open on a day older than yesterday + empty today → BLOCKED (not STARTED).
+        assertEquals(
+            ClockInResult.BLOCKED_OVERNIGHT,
+            ClockDayState.decideClockIn(
+                null, null, 0.0,
+                yesterdayIn = null,
+                yesterdayOut = null,
+                orphanOpenOnOtherDay = true
+            )
+        )
+    }
+
+    @Test
+    fun clockIn_orphanFlagFalse_starts() {
+        assertEquals(
+            ClockInResult.STARTED,
+            ClockDayState.decideClockIn(
+                null, null, 0.0, null, null, orphanOpenOnOtherDay = false
+            )
+        )
+    }
+
+    @Test
     fun clockIn_emptyWithYesterdayClosed_starts() {
         assertEquals(
             ClockInResult.STARTED,
@@ -172,6 +196,16 @@ class ClockDayStateTest {
         assertEquals(
             ClockOutResult.FAILED,
             ClockDayState.decideClockOut(null, null, null, null, fivePm)
+        )
+    }
+
+    @Test
+    fun clockOut_emptyWithOrphanOpen_successOvernight() {
+        assertEquals(
+            ClockOutResult.SUCCESS_OVERNIGHT,
+            ClockDayState.decideClockOut(
+                null, null, null, null, sixAm, orphanOpenOnOtherDay = true
+            )
         )
     }
 
@@ -403,5 +437,35 @@ class ClockDayStateTest {
         assertTrue(ui.clockInEnabled)
         assertFalse(ui.clockOutEnabled)
         assertFalse(ui.overnightPending)
+    }
+
+    @Test
+    fun derive_orphanOpen_surfacesDateAndPending() {
+        val orphanDay = today.minusDays(3)
+        val ui = ClockDayState.deriveHomeClockUi(
+            todayIn = null,
+            todayOut = null,
+            todayHoursWorked = 0.0,
+            yesterdayIn = null,
+            yesterdayOut = null,
+            yesterdayEpochDay = yesterday.toEpochDay(),
+            orphanOpenEpochDay = orphanDay.toEpochDay()
+        )
+        assertTrue(ui.overnightPending)
+        assertTrue(ui.clockInEnabled)
+        assertTrue(ui.clockOutEnabled)
+        assertEquals(orphanDay, ui.openOvernightDate)
+    }
+
+    @Test
+    fun derive_yesterdayOvernight_winsOverOrphanDate() {
+        val orphanDay = today.minusDays(3)
+        val ui = ClockDayState.deriveHomeClockUi(
+            todayEntry = null,
+            yesterdayEntry = entry(yesterday, clockIn = tenPm, clockOut = null),
+            orphanOpenEntry = entry(orphanDay, clockIn = nineAm, clockOut = null)
+        )
+        assertTrue(ui.overnightPending)
+        assertEquals(yesterday, ui.openOvernightDate)
     }
 }

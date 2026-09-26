@@ -7,6 +7,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.rmltd.workhourstracker.worker.ReminderScheduler
 import com.rmltd.workhourstracker.worker.WeeklyResetWorker
+import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -21,6 +22,7 @@ class BootReceiver : BroadcastReceiver() {
             // (or alarms cleared by an app update).
             WorkManager.getInstance(context)
                 .enqueue(OneTimeWorkRequestBuilder<WeeklyResetWorker>().build())
+            WorkHoursWidgetUpdater.requestUpdate(context)
         }
     }
 }
