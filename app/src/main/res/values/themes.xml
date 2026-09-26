@@ -1,3 +1,7 @@
 <resources>
-    <style name="Theme.WorkHoursTracker" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- windowBackground matches Compose PurpleLight surface/background (#F7F2FA)
+         so the first frame before setContent does not flash system white. -->
+    <style name="Theme.WorkHoursTracker" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
 </resources>

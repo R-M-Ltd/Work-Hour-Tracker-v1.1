@@ -4,7 +4,7 @@ A fully self-contained Android app — no backend, no API keys, no account sign-
 Everything runs and stores data on-device.
 
 **Application id / package:** `com.rmltd.workhourstracker`  
-**Version:** 1.3.20 (versionCode 22)
+**Version:** 1.3.21 (versionCode 23)
 
 See [CHANGELOG.md](CHANGELOG.md) for shipped 1.3.x notes.
 
@@ -24,7 +24,7 @@ See [CHANGELOG.md](CHANGELOG.md) for shipped 1.3.x notes.
 - Optional **lunch start** and **lunch end**. If either is left blank, lunch did not occur and is not subtracted.
 - Hours are calculated from clock times (minus lunch when both lunch fields are set) and rounded to hundredths. Hours cannot be typed.
 - **Weekly goal** (Settings, default **40.00** hours): Home shows a progress ring + remaining hours. Local preference only.
-- The current week's running total recalculates the instant any day is saved. Week window and Home “today” refresh on Activity **ON_START** / resume and on `DATE_CHANGED` / timezone / time change broadcasts (no process kill needed after midnight).
+- The current week's running total recalculates the instant any day is saved. Week window and Home “today” refresh on Activity **ON_START** and on `DATE_CHANGED` / timezone / time change broadcasts (no process kill needed after midnight).
 - A local notification reminds you once a day to log your hours (default 6:00 PM). Change the time or turn reminders off in **Settings**. The reminder is **skipped** if today already has a clock-out (intentional; open overnight on yesterday does not suppress today’s reminder).
 - On Android 12+, if exact alarms are denied, Settings offers **Allow exact alarms** (opens the system exact-alarm permission screen). Reminders/week archive fall back to inexact timing until granted.
 - If notification permission is denied (or notifications are blocked), Settings shows clear **Notifications blocked** guidance with **Allow notifications** / **Open notification settings** — reminders do not fail silently.

@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
     /**
      * When the app stays open across local midnight (or TZ changes), recompute
      * weekStart / Home anchor without requiring a process kill. Also fired on
-     * Lifecycle ON_START so returning to the activity always refreshes.
+     * Lifecycle ON_START (single path — not also onResume) so returning always refreshes.
      */
     private val dateChangeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -85,12 +85,6 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         lifecycle.removeObserver(lifecycleRefreshObserver)
         super.onDestroy()
-    }
-
-    /** Kept so resume-from-paused (same Activity, no stop) still refreshes. */
-    override fun onResume() {
-        super.onResume()
-        viewModel.onAppResume()
     }
 
     private fun registerDateChangeReceiver() {

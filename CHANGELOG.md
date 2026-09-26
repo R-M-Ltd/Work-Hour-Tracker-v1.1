@@ -3,6 +3,16 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.21] — versionCode 23
+
+Perf / white-flash patch only:
+
+- **White flash:** `Theme.WorkHoursTracker` `android:windowBackground` tinted to Compose PurpleLight surface `#F7F2FA` (`launch_background`) so the pre-Compose frame matches the app surface.
+- **Single onAppResume path:** `MainActivity` keeps Lifecycle `ON_START` + date/TZ broadcast refresh; drops the duplicate `onResume()` `onAppResume()` call.
+- **Application.onCreate:** Moves the three `ReminderScheduler.schedule*` calls onto `appScope` (IO) with archive catch-up; widget `requestUpdate` unchanged (already async).
+- Optional widget-skip-on-resume deferred (not clearly low-risk).
+- Version 1.3.21 / versionCode 23.
+
 ## [1.3.20] — versionCode 22
 
 Findings polish after 1.3.19 review:

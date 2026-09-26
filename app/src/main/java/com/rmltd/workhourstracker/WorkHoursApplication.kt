@@ -24,12 +24,13 @@ class WorkHoursApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Idempotent: re-scheduling just replaces the existing pending alarm.
-        ReminderScheduler.scheduleDailyReminder(this)
-        ReminderScheduler.scheduleEndOfDayReminder(this)
-        ReminderScheduler.scheduleWeeklyReset(this)
-        // Catch up archives if week-start 2 AM was missed while the device was off.
+        // Schedule + archive off main: AlarmManager work is idempotent (replace pending).
+        // Once-per-process; BootReceiver / Settings still re-arm when needed.
         appScope.launch {
+            ReminderScheduler.scheduleDailyReminder(this@WorkHoursApplication)
+            ReminderScheduler.scheduleEndOfDayReminder(this@WorkHoursApplication)
+            ReminderScheduler.scheduleWeeklyReset(this@WorkHoursApplication)
+            // Catch up archives if week-start 2 AM was missed while the device was off.
             runCatching { repository.catchUpWeekArchives() }
         }
         WorkHoursWidgetUpdater.requestUpdate(this)

@@ -383,7 +383,7 @@ class WorkHoursViewModel(
         WorkHoursWidgetUpdater.requestUpdate(appContext)
     }
 
-    /** Refresh week boundary + Home today. Called from ON_START/resume and date/TZ broadcasts (L1). */
+    /** Refresh week boundary + Home today. Called from ON_START and date/TZ broadcasts. */
     fun onAppResume() {
         refreshWeekBoundary()
         homeAnchorDate.value = LocalDate.now()
