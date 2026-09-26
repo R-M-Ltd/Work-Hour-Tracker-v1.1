@@ -3,6 +3,15 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.23] — versionCode 25
+
+Layout fix for Entry Break buttons clipped at the bottom:
+
+- **Entry scroll:** Entry screen Column now uses `verticalScroll` (same pattern as Settings) so Shift / Break / Hours / Note / Save content can scroll on short screens. Break End (and sibling Break start / Save) are fully visible.
+- **Break labels:** `ClockTimeRow` button text allows 2 lines so "Break end (optional)" and siblings stay fully labeled.
+- No punch/lunch behavior, theme, widget ID, or Home CTA changes. Home still navigates only via Log lunch / break….
+- Version 1.3.23 / versionCode 25.
+
 ## [1.3.22] — versionCode 24
 
 Ivan full-app UI rebuild from `ui-rebuild-1.3.22` design pack (baseline 1.3.21 / `d821a93`; visual language polish `a94ee7d`):

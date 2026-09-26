@@ -12,6 +12,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -261,6 +263,7 @@ fun EntryScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -602,7 +605,11 @@ private fun ClockTimeRow(
             Icon(Icons.Filled.Schedule, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             val suffix = if (optional && minutes == null) " (optional)" else ""
-            Text(if (minutes == null) "$label$suffix" else "$label  ${HoursCalc.formatClock(minutes)}")
+            Text(
+                if (minutes == null) "$label$suffix" else "$label  ${HoursCalc.formatClock(minutes)}",
+                maxLines = 2,
+                softWrap = true
+            )
         }
         if (optional && minutes != null && onClear != null) {
             IconButton(onClick = onClear) {
