@@ -307,16 +307,18 @@ fun HomeScreen(
                                             ClockInResult.BLOCKED_OVERNIGHT -> {
                                                 showOvernightDialog = true
                                             }
-                                            else -> {
-                                                val msg = when (result) {
-                                                    ClockInResult.STARTED -> "Clocked in now"
-                                                    ClockInResult.ALREADY_OPEN -> "Already clocked in"
-                                                    ClockInResult.ALREADY_CLOSED ->
-                                                        "Today already has hours — edit the day to change it"
-                                                    ClockInResult.BLOCKED_OVERNIGHT ->
-                                                        "Finish yesterday's shift first"
-                                                }
-                                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                            ClockInResult.STARTED -> {
+                                                Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
+                                            }
+                                            ClockInResult.ALREADY_OPEN -> {
+                                                Toast.makeText(context, "Already clocked in", Toast.LENGTH_SHORT).show()
+                                            }
+                                            ClockInResult.ALREADY_CLOSED -> {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Today already has hours — edit the day to change it",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             }
                                         }
                                     }
@@ -473,7 +475,10 @@ fun HomeScreen(
                             viewModel.clockOutNow(today) { result ->
                                 val msg = when (result) {
                                     ClockOutResult.SUCCESS_OVERNIGHT ->
-                                        "Finished open overnight shift"
+                                        HomeOvernightCopy.clockOutOvernightToast(
+                                            homeClock.openOvernightDate,
+                                            today
+                                        )
                                     ClockOutResult.SUCCESS -> "Clocked out now"
                                     ClockOutResult.FAILED ->
                                         "Could not finish open shift — try editing $dayLabel"

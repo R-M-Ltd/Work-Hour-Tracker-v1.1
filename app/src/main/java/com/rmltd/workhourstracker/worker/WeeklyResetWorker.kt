@@ -13,7 +13,8 @@ import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
  * BroadcastReceiver) so the archive operation reliably completes even if the
  * device is briefly busy or the app process gets killed right after the alarm.
  * Refreshes the home-screen widget **after** [WorkHoursRepository.catchUpWeekArchives]
- * so week totals are not briefly stale (receiver intentionally skips early refresh).
+ * so week totals are not briefly stale (WeeklyResetReceiver and BootReceiver
+ * intentionally skip early refresh).
  */
 class WeeklyResetWorker(appContext: Context, params: WorkerParameters) :
     CoroutineWorker(appContext, params) {

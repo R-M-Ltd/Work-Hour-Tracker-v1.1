@@ -214,7 +214,7 @@ class WorkHoursViewModel(
     }
 
     /**
-     * @param onResult [ClockOutResult] — may be overnight finish of yesterday's open shift.
+     * @param onResult [ClockOutResult] — may finish any other-day open punch (yesterday or orphan).
      */
     fun clockOutNow(date: LocalDate = LocalDate.now(), onResult: (ClockOutResult) -> Unit = {}) {
         val now = LocalTime.now()
@@ -246,7 +246,7 @@ class WorkHoursViewModel(
         }
     }
 
-    /** Discard yesterday's open punch and clock in today (H2 option 3). */
+    /** Discard any other-day open punch (yesterday or orphan) and clock in today (H2 option 3). */
     fun discardOvernightAndClockIn(
         date: LocalDate = LocalDate.now(),
         onResult: (ClockInResult) -> Unit = {}

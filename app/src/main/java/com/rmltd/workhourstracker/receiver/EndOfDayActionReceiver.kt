@@ -38,6 +38,9 @@ class EndOfDayActionReceiver : BroadcastReceiver() {
 
         when (action) {
             ACTION_CLOCK_OUT -> {
+                // Cancel fail-closed same-day retry so it cannot race after clock-out handling
+                // (success, already-closed, or fail re-notify) — symmetry with ACTION_EXTEND.
+                ReminderScheduler.cancelEndOfDaySameDayRetry(context)
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         val app = context.applicationContext as? WorkHoursApplication

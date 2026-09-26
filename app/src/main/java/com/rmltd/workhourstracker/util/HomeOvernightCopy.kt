@@ -11,7 +11,7 @@ object HomeOvernightCopy {
 
     /**
      * Toast after [com.rmltd.workhourstracker.data.ClockOutResult.SUCCESS_OVERNIGHT]
-     * from the Home "Clock out now" button.
+     * from Home "Clock out now" or the overnight dialog Finish action.
      */
     fun clockOutOvernightToast(openOvernightDate: LocalDate?, today: LocalDate): String {
         val openDay = openOvernightDate ?: today.minusDays(1)

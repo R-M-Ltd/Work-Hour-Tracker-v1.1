@@ -3,6 +3,17 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.20] — versionCode 22
+
+Findings polish after 1.3.19 review:
+
+- **Overnight dialog Finish toast (L):** Routes `SUCCESS_OVERNIGHT` through `HomeOvernightCopy.clockOutOvernightToast` (same as Clock-out-now) so yesterday vs orphan/open overnight wording is correct.
+- **Dead clock-in toast (L):** Removed unreachable `BLOCKED_OVERNIGHT → "Finish yesterday's shift first"` arm (outer branch already opens the overnight dialog).
+- **ViewModel KDoc (L):** `clockOutNow` / `discardOvernightAndClockIn` now say any other-day open (yesterday or orphan), matching 1.3.18+ behavior.
+- **EOD Clock out (M):** `ACTION_CLOCK_OUT` cancels `cancelEndOfDaySameDayRetry` (symmetry with `ACTION_EXTEND`) so a fail-closed retry cannot race after clock-out handling.
+- **Boot widget (M):** `BootReceiver` no longer refreshes before archive; `WeeklyResetWorker` refreshes after `catchUpWeekArchives` (same pattern as `WeeklyResetReceiver`) so week-boundary boots do not briefly show pre-archive week totals.
+- Version 1.3.20 / versionCode 22.
+
 ## [1.3.19] — versionCode 21
 
 Findings polish after 1.3.18 review:
@@ -11,7 +22,7 @@ Findings polish after 1.3.18 review:
 - **EOD Extend (M):** `ACTION_EXTEND` cancels `cancelEndOfDaySameDayRetry` alongside clear-fired/snooze so a fail-closed retry cannot race the snooze notify.
 - **WidgetContent KDoc (L):** `overnightPending` documents any other-day open (not only yesterday).
 - **isStillClockedIn (L):** Dropped unused `today` param; behavior unchanged (any open punch).
-- **Weekly reset widget (L):** `WeeklyResetReceiver` no longer refreshes before archive; `WeeklyResetWorker` refreshes after `catchUpWeekArchives` (BootReceiver early refresh kept).
+- **Weekly reset widget (L):** `WeeklyResetReceiver` no longer refreshes before archive; `WeeklyResetWorker` refreshes after `catchUpWeekArchives` (BootReceiver early refresh kept until 1.3.20).
 - **Settings Color helper (L):** Expanded Color copy matches palette radios/rows ("Choose a palette…"); collapsed copy unchanged.
 - Version 1.3.19 / versionCode 21.
 

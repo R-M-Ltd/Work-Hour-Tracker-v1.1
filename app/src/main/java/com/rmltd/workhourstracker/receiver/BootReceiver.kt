@@ -7,7 +7,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.rmltd.workhourstracker.worker.ReminderScheduler
 import com.rmltd.workhourstracker.worker.WeeklyResetWorker
-import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -19,10 +18,13 @@ class BootReceiver : BroadcastReceiver() {
             ReminderScheduler.scheduleEndOfDayReminder(context)
             ReminderScheduler.scheduleWeeklyReset(context)
             // Catch up any week archives missed while the device was powered off
-            // (or alarms cleared by an app update).
+            // (or alarms cleared by an app update). Widget refresh runs in
+            // WeeklyResetWorker *after* catchUpWeekArchives (not here) so a
+            // week-boundary boot does not briefly show pre-archive week totals —
+            // same pattern as WeeklyResetReceiver. Non-boundary boots still
+            // refresh once the (usually no-op) archive path finishes.
             WorkManager.getInstance(context)
                 .enqueue(OneTimeWorkRequestBuilder<WeeklyResetWorker>().build())
-            WorkHoursWidgetUpdater.requestUpdate(context)
         }
     }
 }
