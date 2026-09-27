@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.rmltd.workhourstracker.data.ClockInResult
+import com.rmltd.workhourstracker.data.UpdateOpenClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.DailyEntry
 import com.rmltd.workhourstracker.data.HomeClockUi
@@ -233,17 +234,21 @@ class WorkHoursViewModel(
         date: LocalDate = LocalDate.now(),
         minutes: Int,
         comments: String? = null,
-        onDone: (Boolean) -> Unit = {}
+        onResult: (UpdateOpenClockInResult) -> Unit = {}
     ) {
         if (!clockFlight.compareAndSet(false, true)) {
-            onDone(false)
+            onResult(UpdateOpenClockInResult.BUSY)
             return
         }
         _clockOpInProgress.value = true
         viewModelScope.launch {
             try {
                 clockFlightMutex.withLock {
-                    onDone(repository.updateOpenClockIn(date, minutes, comments))
+                    val ok = repository.updateOpenClockIn(date, minutes, comments)
+                    onResult(
+                        if (ok) UpdateOpenClockInResult.UPDATED
+                        else UpdateOpenClockInResult.FAILED
+                    )
                 }
             } finally {
                 clockFlight.set(false)

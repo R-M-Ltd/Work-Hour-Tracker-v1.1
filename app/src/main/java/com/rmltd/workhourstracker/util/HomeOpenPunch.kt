@@ -43,4 +43,18 @@ object HomeOpenPunch {
             ClockDayState.Kind.CLOSED, ClockDayState.Kind.LEGACY_CLOSED -> Action.LOCAL_ONLY
         }
     }
+
+    /**
+     * Comments to pass into open-punch IN persist (`clockInAt` / `updateOpenClockIn`).
+     * Preserves a prior stashed [homeCommentsDraft] (e.g. OUT midnight reason) when
+     * the new IN has no midnight reason — otherwise Room emit would wipe the draft.
+     */
+    fun punchCommentsForOpenIn(homeCommentsDraft: String, reasonNote: String?): String? {
+        return if (reasonNote != null && reasonNote.isNotBlank()) {
+            ZeroTimeNote.mergeReasonIntoNote(homeCommentsDraft, "Clock in", reasonNote)
+        } else {
+            homeCommentsDraft.takeIf { it.isNotBlank() }
+        }
+    }
 }
+

@@ -3,6 +3,22 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.28] — versionCode 30
+
+QA residuals from Arthur 1.3.27 + Ivan UI pack `ui-rebuild-1.3.28` (baseline `7b1bf5c`):
+
+- **D1 homeCommentsDraft on open-punch IN:** Pass draft (via `HomeOpenPunch.punchCommentsForOpenIn`) into `clockInAt` / `updateOpenClockIn`; show draft on Home after IN (no flash-empty).
+- **D2 ZeroTimeNote merge:** Full-line equality dedupe (`containsFullLine`) — not substring `contains`. Zero-dialog copy unchanged.
+- **D3 updateOpenClockIn BUSY:** `UpdateOpenClockInResult` {UPDATED, FAILED, BUSY}; toast `Please wait…` on flight reject (same string as other clock ops).
+- **D4 findOpenEntryOnce KDoc:** “Oldest open punch”.
+- **D5 overnight / Forgot:** Finish overnight, Discard, Forgot confirm `enabled = !clockBusy` (Cancel / Edit stay enabled).
+- **S-A local OUT:** Remember keys no longer cross-key IN/OUT — OUT survives open-punch IN.
+- **S-B unsaved caption:** When draft dirty / pending Save, `Not saved yet — tap Save today's times` (`labelSmall` / `onSurfaceVariant`).
+- **S-C multi-open:** Overnight finish drains leftover corrupt opens (kept from WIP; pack out-of-scope but no contradiction).
+- **S-D Arc Clock:** No new assets — device-verify only; splash `#5B3F9E` + Arc Clock unchanged.
+- Protected: Lunch CTA nav-only, EOD/CSV/PDF, locked hexes + Aqua, cloud sync off / no OAuth.
+- Version 1.3.28 / versionCode 30.
+
 ## [1.3.27] — versionCode 29
 
 Fixes from the 1.3.26 analysis (High/Medium/Low); no drive-by features:

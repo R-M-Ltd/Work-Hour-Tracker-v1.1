@@ -56,6 +56,45 @@ class ZeroTimeNoteTest {
     }
 
     @Test
+    fun mergeReasonIntoNote_dedupesExactLineEquality_notPrefixSubstring() {
+        // Longer line that contains the shorter formatted line as a prefix must NOT
+        // suppress a distinct append (D2 — was String.contains).
+        val existing = "12:00 AM (Clock in): early bird"
+        val merged = ZeroTimeNote.mergeReasonIntoNote(existing, "Clock in", "early")
+        assertEquals(
+            "12:00 AM (Clock in): early bird\n12:00 AM (Clock in): early",
+            merged
+        )
+        // Exact full line present → no second append
+        assertEquals(
+            merged,
+            ZeroTimeNote.mergeReasonIntoNote(merged, "Clock in", "early")
+        )
+    }
+
+    @Test
+    fun containsFullLine_equalityOnly() {
+        assertTrue(
+            ZeroTimeNote.containsFullLine(
+                "12:00 AM (Clock in): early bird",
+                "12:00 AM (Clock in): early bird"
+            )
+        )
+        assertFalse(
+            ZeroTimeNote.containsFullLine(
+                "12:00 AM (Clock in): early bird",
+                "12:00 AM (Clock in): early"
+            )
+        )
+        assertTrue(
+            ZeroTimeNote.containsFullLine(
+                "Note\n12:00 AM (Clock in): early\nMore",
+                "12:00 AM (Clock in): early"
+            )
+        )
+    }
+
+    @Test
     fun mergeZeroHoursIntoNote_formatAndDedupe() {
         assertEquals(
             "0 hours: unpaid training day",
@@ -67,6 +106,12 @@ class ZeroTimeNoteTest {
         )
         val once = ZeroTimeNote.mergeZeroHoursIntoNote("Note", "unpaid training day")
         assertEquals(once, ZeroTimeNote.mergeZeroHoursIntoNote(once, "unpaid training day"))
+        // Prefix of a longer zero-hours line must not suppress a distinct reason.
+        val longer = "0 hours: unpaid training day off"
+        assertEquals(
+            "0 hours: unpaid training day off\n0 hours: unpaid training day",
+            ZeroTimeNote.mergeZeroHoursIntoNote(longer, "unpaid training day")
+        )
     }
 
     @Test
@@ -82,5 +127,13 @@ class ZeroTimeNoteTest {
         assertTrue(ZeroTimeNote.needsZeroHoursReason(480, 1020, 0.0))
         assertFalse(ZeroTimeNote.needsZeroHoursReason(480, 480, 0.0))
         assertFalse(ZeroTimeNote.needsZeroHoursReason(null, 1020, 0.0))
+    }
+
+    @Test
+    fun unsavedDraftCaption_packCopy() {
+        assertEquals(
+            "Not saved yet — tap Save today's times",
+            ZeroTimeNote.UNSAVED_DRAFT_CAPTION
+        )
     }
 }

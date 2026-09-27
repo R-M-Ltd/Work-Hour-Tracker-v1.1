@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
+import com.rmltd.workhourstracker.data.UpdateOpenClockInResult
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.util.ClockHaptics
 import com.rmltd.workhourstracker.util.HomeManualTimes
@@ -81,16 +82,16 @@ fun HomeScreen(
     var zeroHoursReasonText by remember { mutableStateOf("") }
 
     val todayEntry = viewModel.entryFor(today, entries)
+    // Key IN only on date + Room IN (not OUT) so open-punch IN persist does not
+    // wipe a locally picked OUT (S-A). Key OUT only on date + Room OUT.
     var homeInMinutes by remember(
         todayEntry?.dateEpochDay,
-        todayEntry?.clockInMinutes,
-        todayEntry?.clockOutMinutes
+        todayEntry?.clockInMinutes
     ) {
         mutableStateOf(todayEntry?.clockInMinutes)
     }
     var homeOutMinutes by remember(
         todayEntry?.dateEpochDay,
-        todayEntry?.clockInMinutes,
         todayEntry?.clockOutMinutes
     ) {
         mutableStateOf(todayEntry?.clockOutMinutes)
@@ -202,22 +203,23 @@ fun HomeScreen(
                     todayHoursWorked = todayEntry?.hoursWorked ?: 0.0,
                     overnightOrOrphanPending = homeClock.overnightPending
                 )
-                val mergedComments = if (reasonNote != null && reasonNote.isNotBlank()) {
-                    ZeroTimeNote.mergeReasonIntoNote(homeCommentsDraft, "Clock in", reasonNote)
-                } else {
-                    null
-                }
+                // D1: pass draft (or merged midnight reason) so open-punch IN does not
+                // drop a prior OUT/LOCAL_ONLY stash when Room re-emits comments.
+                val punchComments = HomeOpenPunch.punchCommentsForOpenIn(
+                    homeCommentsDraft,
+                    reasonNote
+                )
                 when (action) {
                     HomeOpenPunch.Action.SHOW_OVERNIGHT -> {
                         // Same gate as Clock-in-now — do not dirty homeInMinutes.
                         showOvernightDialog = true
                     }
                     HomeOpenPunch.Action.START_OPEN -> {
-                        viewModel.clockInAt(today, minutes, mergedComments) { result ->
+                        viewModel.clockInAt(today, minutes, punchComments) { result ->
                             when (result) {
                                 ClockInResult.STARTED -> {
                                     homeInMinutes = minutes
-                                    if (mergedComments != null) homeCommentsDraft = mergedComments
+                                    if (punchComments != null) homeCommentsDraft = punchComments
                                     Toast.makeText(context, "Clock-in saved", Toast.LENGTH_SHORT).show()
                                 }
                                 ClockInResult.BLOCKED_OVERNIGHT -> {
@@ -240,25 +242,31 @@ fun HomeScreen(
                         }
                     }
                     HomeOpenPunch.Action.UPDATE_OPEN -> {
-                        viewModel.updateOpenClockIn(today, minutes, mergedComments) { ok ->
-                            if (ok) {
-                                homeInMinutes = minutes
-                                if (mergedComments != null) homeCommentsDraft = mergedComments
-                                Toast.makeText(context, "Clock-in updated", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(
-                                    context,
-                                    "Could not update clock-in — try again",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                        viewModel.updateOpenClockIn(today, minutes, punchComments) { result ->
+                            when (result) {
+                                UpdateOpenClockInResult.UPDATED -> {
+                                    homeInMinutes = minutes
+                                    if (punchComments != null) homeCommentsDraft = punchComments
+                                    Toast.makeText(context, "Clock-in updated", Toast.LENGTH_SHORT).show()
+                                }
+                                UpdateOpenClockInResult.BUSY -> {
+                                    Toast.makeText(context, "Please wait…", Toast.LENGTH_SHORT).show()
+                                }
+                                UpdateOpenClockInResult.FAILED -> {
+                                    Toast.makeText(
+                                        context,
+                                        "Could not update clock-in — try again",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         }
                     }
                     HomeOpenPunch.Action.LOCAL_ONLY -> {
                         // Closed day: local minutes + stash note until Save (no immediate Room write).
                         homeInMinutes = minutes
-                        if (mergedComments != null) {
-                            homeCommentsDraft = mergedComments
+                        if (punchComments != null) {
+                            homeCommentsDraft = punchComments
                         }
                     }
                 }
@@ -640,6 +648,48 @@ fun HomeScreen(
                                 enabled = !clockBusy,
                                 onPick = { homePickerField = HomeClockField.OUT }
                             )
+                            // D1: keep stashed draft visible after open-punch IN (no flash-empty).
+                            if (homeCommentsDraft.isNotBlank()) {
+                                Spacer(Modifier.height(10.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant
+                                    ),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .semantics { contentDescription = "Today's note draft" }
+                                ) {
+                                    Text(
+                                        homeCommentsDraft,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                                // S-B: honesty when draft dirty vs Room, or draft present with
+                                // times ready to Save but day not closed yet (OUT still local).
+                                val roomComments = todayEntry?.comments.orEmpty()
+                                val draftDirtyVsRoom =
+                                    homeCommentsDraft.trim() != roomComments.trim()
+                                val pendingClosedSave =
+                                    HomeManualTimes.canSave(homeInMinutes, homeOutMinutes) &&
+                                        todayEntry?.clockOutMinutes == null
+                                if (draftDirtyVsRoom || pendingClosedSave) {
+                                    Text(
+                                        ZeroTimeNote.UNSAVED_DRAFT_CAPTION,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .padding(top = 6.dp)
+                                            .semantics {
+                                                contentDescription = ZeroTimeNote.UNSAVED_DRAFT_CAPTION
+                                            }
+                                    )
+                                }
+                            }
                             Spacer(Modifier.height(8.dp))
                             Button(
                                 onClick = { tryHomeManualSave() },
@@ -738,6 +788,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(8.dp))
                     TextButton(
                         onClick = {
+                            if (clockBusy) return@TextButton
                             showOvernightDialog = false
                             viewModel.clockOutNow(today) { result ->
                                 when (result) {
@@ -762,6 +813,7 @@ fun HomeScreen(
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
                         },
+                        enabled = !clockBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Finish overnight (clock out now)") }
                     TextButton(
@@ -775,6 +827,7 @@ fun HomeScreen(
                     }
                     TextButton(
                         onClick = {
+                            if (clockBusy) return@TextButton
                             showOvernightDialog = false
                             viewModel.discardOvernightAndClockIn(today) { result ->
                                 val msg = when (result) {
@@ -790,6 +843,7 @@ fun HomeScreen(
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
                         },
+                        enabled = !clockBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Discard open punch & clock in today") }
                 }
@@ -967,6 +1021,7 @@ fun HomeScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        if (clockBusy) return@TextButton
                         val minutes = state.hour * 60 + state.minute
                         showForgotClockOut = false
                         viewModel.clockOutAt(today, minutes) { result ->
@@ -989,7 +1044,8 @@ fun HomeScreen(
                             }
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }
-                    }
+                    },
+                    enabled = !clockBusy
                 ) { Text("Clock out") }
             },
             dismissButton = {

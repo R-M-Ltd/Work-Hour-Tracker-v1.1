@@ -72,4 +72,34 @@ class HomeOpenPunchTest {
             )
         )
     }
+
+    @Test
+    fun punchCommentsForOpenIn_preservesDraftWhenNoMidnightReason() {
+        val draft = "12:00 AM (Clock out): Left at midnight"
+        assertEquals(
+            draft,
+            HomeOpenPunch.punchCommentsForOpenIn(draft, reasonNote = null)
+        )
+        assertEquals(
+            draft,
+            HomeOpenPunch.punchCommentsForOpenIn(draft, reasonNote = "  ")
+        )
+        assertEquals(
+            null,
+            HomeOpenPunch.punchCommentsForOpenIn("", reasonNote = null)
+        )
+    }
+
+    @Test
+    fun punchCommentsForOpenIn_mergesMidnightReasonOntoDraft() {
+        val draft = "12:00 AM (Clock out): Left at midnight"
+        assertEquals(
+            "12:00 AM (Clock out): Left at midnight\n12:00 AM (Clock in): early",
+            HomeOpenPunch.punchCommentsForOpenIn(draft, reasonNote = "early")
+        )
+        assertEquals(
+            "12:00 AM (Clock in): early",
+            HomeOpenPunch.punchCommentsForOpenIn("", reasonNote = "early")
+        )
+    }
 }

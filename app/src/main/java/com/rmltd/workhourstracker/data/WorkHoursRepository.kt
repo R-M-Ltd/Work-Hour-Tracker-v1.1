@@ -31,6 +31,14 @@ enum class ClockOutResult {
     BUSY
 }
 
+/** Outcome of Home TimePicker update on an already-open day. */
+enum class UpdateOpenClockInResult {
+    UPDATED,
+    FAILED,
+    /** ViewModel clockFlight rejected — overlapping op still in progress. */
+    BUSY
+}
+
 /** Outcome of Entry save when an open overnight exists on another day. */
 sealed class SaveEntryResult {
     data object Saved : SaveEntryResult()
@@ -82,7 +90,7 @@ class WorkHoursRepository(
         return open.clockInMinutes != null && open.clockOutMinutes == null
     }
 
-    /** Latest open punch row, if any (for widget / Home orphan nudge). */
+    /** Oldest open punch row, if any (for widget / Home orphan nudge). */
     suspend fun findOpenEntryOnce(): DailyEntry? = dao.findOpenEntry()
 
     /** Date-scoped Flow — used when Entry navigates outside the configured current week. */
@@ -394,6 +402,27 @@ class WorkHoursRepository(
                     breakPaid = target.breakPaid
                 )
                 refreshWeekArchiveIfPresent(targetDate)
+                // S-C harden: corrupt multi-open — after closing the preferred
+                // overnight/orphan target, close any remaining older/newer opens
+                // at the same out minutes so Home is not left with a leftover open.
+                while (true) {
+                    val leftover = dao.findOpenEntry() ?: break
+                    if (leftover.dateEpochDay == date.toEpochDay()) break
+                    val leftoverIn = leftover.clockInMinutes ?: break
+                    val leftoverDate = LocalDate.ofEpochDay(leftover.dateEpochDay)
+                    upsertClosedEntry(
+                        date = leftoverDate,
+                        clockInMinutes = leftoverIn,
+                        clockOutMinutes = minutes,
+                        comments = leftover.comments,
+                        lunchOutMinutes = leftover.lunchOutMinutes,
+                        lunchInMinutes = leftover.lunchInMinutes,
+                        equalOutMeansFullDay = leftoverIn == minutes,
+                        breakDurationMinutes = leftover.breakDurationMinutes,
+                        breakPaid = leftover.breakPaid
+                    )
+                    refreshWeekArchiveIfPresent(leftoverDate)
+                }
             }
         }
         decision

@@ -123,4 +123,39 @@ class WorkHoursRepositoryClockInPersistTest {
         assertNotNull(open)
         assertEquals(older.toEpochDay(), open!!.dateEpochDay)
     }
+
+    @Test
+    fun clockOutNow_overnight_closesAllCorruptMultiOpen() = runBlocking {
+        val (dao, repo) = newRepo()
+        val older = today.minusDays(3)
+        val yesterday = today.minusDays(1)
+        val outAt = 9 * 60
+        dao.upsertEntry(
+            DailyEntry(
+                dateEpochDay = older.toEpochDay(),
+                hoursWorked = 0.0,
+                comments = "",
+                weekStartEpochDay = older.toEpochDay(),
+                clockInMinutes = nineAm,
+                clockOutMinutes = null
+            )
+        )
+        dao.upsertEntry(
+            DailyEntry(
+                dateEpochDay = yesterday.toEpochDay(),
+                hoursWorked = 0.0,
+                comments = "",
+                weekStartEpochDay = yesterday.toEpochDay(),
+                clockInMinutes = tenAm,
+                clockOutMinutes = null
+            )
+        )
+        assertEquals(ClockOutResult.SUCCESS_OVERNIGHT, repo.clockOutNow(today, outAt))
+        // Prefer yesterday overnight close, then drain remaining corrupt opens (S-C).
+        val y = repo.entryForDateOnce(yesterday)!!
+        assertEquals(outAt, y.clockOutMinutes)
+        val o = repo.entryForDateOnce(older)!!
+        assertEquals(outAt, o.clockOutMinutes)
+        assertNull(repo.findOpenEntryOnce())
+    }
 }

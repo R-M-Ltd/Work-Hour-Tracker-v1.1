@@ -16,6 +16,9 @@ object ZeroTimeNote {
     const val DISMISS_LABEL = "Cancel"
     const val EMPTY_ERROR = "Enter a reason to continue"
 
+    /** S-B: honesty caption when Home draft is pending Save. */
+    const val UNSAVED_DRAFT_CAPTION = "Not saved yet — tap Save today's times"
+
     const val ZERO_HOURS_TITLE = "Reason for 0 hours?"
     const val ZERO_HOURS_BODY =
         "This day would save as 0 hours. Add a short reason — it is saved as today’s note."
@@ -45,31 +48,43 @@ object ZeroTimeNote {
         "12:00 AM ($fieldLabel): ${reason.trim()}"
 
     /**
+     * True when [existing] has a newline-delimited line equal to [line]
+     * (trimmed). Substring / prefix matches on a longer line do **not** count
+     * (e.g. "…: early bird" must not suppress appending "…: early").
+     */
+    fun containsFullLine(existing: String, line: String): Boolean {
+        val target = line.trim()
+        if (target.isEmpty()) return false
+        return existing.lineSequence().any { it.trim() == target }
+    }
+
+    /**
      * Merge a midnight reason line into [existing].
-     * Dedupes only on the **full formatted line** — never on a bare [reason]
-     * substring (avoids skipping append when "early" already appears in a note).
+     * Dedupes only on **full formatted line equality** — never substring
+     * [String.contains] and never bare [reason] (avoids skipping append when
+     * "early" already appears inside a longer note line).
      */
     fun mergeReasonIntoNote(existing: String, fieldLabel: String, reason: String): String {
         val line = formatReasonLine(fieldLabel, reason)
         if (reason.trim().isEmpty()) return existing
         val e = existing.trim()
         if (e.isEmpty()) return line
-        if (e.contains(line)) return e
+        if (containsFullLine(e, line)) return e
         return "$e\n$line"
     }
 
     /**
      * Legacy overload used when field label is already baked into [reason]
-     * (full line or free-text). Dedupes only when the trimmed [reason] appears
-     * as a full line match / exact containment of that whole string — callers
-     * should pass the formatted line, not a short substring.
+     * (full line or free-text). Dedupes only on full-line equality of the
+     * trimmed [reason] — callers should pass the formatted line, not a short
+     * substring.
      */
     fun mergeReasonIntoNote(existing: String, reason: String): String {
         val r = reason.trim()
         if (r.isEmpty()) return existing
         val e = existing.trim()
         if (e.isEmpty()) return r
-        if (e.contains(r)) return e
+        if (containsFullLine(e, r)) return e
         return "$e\n$r"
     }
 
@@ -96,7 +111,7 @@ object ZeroTimeNote {
         if (reason.trim().isEmpty()) return existing
         val e = existing.trim()
         if (e.isEmpty()) return line
-        if (e.contains(line)) return e
+        if (containsFullLine(e, line)) return e
         return "$e\n$line"
     }
 
