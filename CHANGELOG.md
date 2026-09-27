@@ -3,6 +3,16 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.30] — versionCode 32
+
+Arthur QA Suspected from 1.3.29 + Ivan UI pack `ui-rebuild-1.3.30` (baseline `c1a7d25`):
+
+- **S-A Arc Clock polish:** Drop-in sharper mipmap FG/BG, splash `ic_splash_icon` 432, and monochrome VectorDrawable (arc + ticks + hand) from `icon-polish/`. Splash `#5B3F9E` / adaptive wiring unchanged.
+- **S-B durable Home draft:** Persist dirty IN/OUT minutes + comments to SharedPreferences keyed by `todayEpochDay`; restore on Home enter; clear on successful Save / day rollover; keep `Not saved yet — tap Save today's times`; one-shot toast `Restored unsaved times`.
+- **S-C orphan same-OUT:** No production UI (`uiNeeded: false`) — silent `drainLeftoverOpens` stays.
+- Protected: Lunch CTA nav-only, EOD 8pm / Extend 1h, CSV/PDF, locked hexes + Aqua, cloud sync off / no OAuth. No Punch Ring.
+- Version 1.3.30 / versionCode 32.
+
 ## [1.3.29] — versionCode 31
 
 Arthur QA residuals from 1.3.28 + Ivan UI pack `ui-rebuild-1.3.29` (baseline `2212e94`):

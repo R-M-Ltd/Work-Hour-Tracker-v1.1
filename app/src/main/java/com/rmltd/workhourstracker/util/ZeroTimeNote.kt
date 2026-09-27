@@ -19,6 +19,9 @@ object ZeroTimeNote {
     /** S-B: honesty caption when Home draft is pending Save. */
     const val UNSAVED_DRAFT_CAPTION = "Not saved yet — tap Save today's times"
 
+    /** S-B: one-shot toast when durable draft is restored after process death. */
+    const val RESTORED_UNSAVED_TIMES_TOAST = "Restored unsaved times"
+
     const val ZERO_HOURS_TITLE = "Reason for 0 hours?"
     const val ZERO_HOURS_BODY =
         "This day would save as 0 hours. Add a short reason — it is saved as today’s note."

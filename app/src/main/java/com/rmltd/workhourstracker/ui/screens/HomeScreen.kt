@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,9 +28,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
+import com.rmltd.workhourstracker.data.HomeDraftPreferences
 import com.rmltd.workhourstracker.data.UpdateOpenClockInResult
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.util.ClockHaptics
+import com.rmltd.workhourstracker.util.HomeDraftRestoreDecision
+import com.rmltd.workhourstracker.util.HomeDraftSnapshot
+import com.rmltd.workhourstracker.util.HomeDraftStash
 import com.rmltd.workhourstracker.util.HomeManualTimes
 import com.rmltd.workhourstracker.util.HomeOpenPunch
 import com.rmltd.workhourstracker.util.ZeroTimeNote
@@ -106,6 +111,85 @@ fun HomeScreen(
         mutableStateOf(todayEntry?.comments.orEmpty())
     }
 
+    // S-B: durable draft — restore once on Home enter; persist while dirty.
+    var draftRestoreDone by remember(today.toEpochDay()) { mutableStateOf(false) }
+    var restoreToastLatched by remember(today.toEpochDay()) { mutableStateOf(false) }
+
+    // Also key on Room fields so a remember re-key after Flow load cannot
+    // permanently wipe a just-restored stash (toast still one-shot latched).
+    LaunchedEffect(
+        today.toEpochDay(),
+        todayEntry?.clockInMinutes,
+        todayEntry?.clockOutMinutes,
+        todayEntry?.comments
+    ) {
+        val todayEpoch = today.toEpochDay()
+        val decision = HomeDraftStash.decideRestore(
+            stash = HomeDraftPreferences.load(context),
+            todayEpochDay = todayEpoch,
+            localIn = homeInMinutes,
+            localOut = homeOutMinutes,
+            localComments = homeCommentsDraft
+        )
+        when (decision) {
+            is HomeDraftRestoreDecision.ClearStaleDay -> {
+                HomeDraftPreferences.clear(context)
+            }
+            is HomeDraftRestoreDecision.Apply -> {
+                homeInMinutes = decision.snapshot.inMinutes
+                homeOutMinutes = decision.snapshot.outMinutes
+                homeCommentsDraft = decision.snapshot.comments
+                if (!restoreToastLatched) {
+                    Toast.makeText(
+                        context,
+                        ZeroTimeNote.RESTORED_UNSAVED_TIMES_TOAST,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    restoreToastLatched = true
+                }
+            }
+            HomeDraftRestoreDecision.None -> Unit
+        }
+        draftRestoreDone = true
+    }
+
+    LaunchedEffect(
+        draftRestoreDone,
+        homeInMinutes,
+        homeOutMinutes,
+        homeCommentsDraft,
+        todayEntry?.clockInMinutes,
+        todayEntry?.clockOutMinutes,
+        todayEntry?.comments
+    ) {
+        if (!draftRestoreDone) return@LaunchedEffect
+        val todayEpoch = today.toEpochDay()
+        val roomIn = todayEntry?.clockInMinutes
+        val roomOut = todayEntry?.clockOutMinutes
+        val roomComments = todayEntry?.comments.orEmpty()
+        if (HomeDraftStash.shouldPersist(
+                homeInMinutes,
+                homeOutMinutes,
+                homeCommentsDraft,
+                roomIn,
+                roomOut,
+                roomComments
+            )
+        ) {
+            HomeDraftPreferences.save(
+                context,
+                HomeDraftSnapshot(
+                    epochDay = todayEpoch,
+                    inMinutes = homeInMinutes,
+                    outMinutes = homeOutMinutes,
+                    comments = homeCommentsDraft
+                )
+            )
+        } else {
+            HomeDraftPreferences.clearIfEpochDay(context, todayEpoch)
+        }
+    }
+
     fun performHomeManualSave(forceDiscard: Boolean = false) {
         val start = homeInMinutes ?: return
         val end = homeOutMinutes ?: return
@@ -125,6 +209,7 @@ fun HomeScreen(
                 breakDurationMinutes = todayEntry?.breakDurationMinutes,
                 breakPaid = todayEntry?.breakPaid ?: false
             ) {
+                HomeDraftPreferences.clear(context)
                 Toast.makeText(context, "Saved today's times", Toast.LENGTH_SHORT).show()
             }
         } else {
@@ -140,6 +225,7 @@ fun HomeScreen(
             ) { result ->
                 when (result) {
                     is SaveEntryResult.Saved -> {
+                        HomeDraftPreferences.clear(context)
                         Toast.makeText(context, "Saved today's times", Toast.LENGTH_SHORT).show()
                     }
                     is SaveEntryResult.BlockedOvernightOpen -> {

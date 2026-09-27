@@ -1,20 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Arc Clock monochrome for adaptive themed icons (API 33+). Simplified from pack monochrome.svg. -->
+<!-- Arc Clock monochrome polish 1.3.30 — API 33+ themed adaptive icons.
+     Drop-in for res/drawable/ic_launcher_monochrome.xml.
+     Restores progress arc + 12 ticks + ~5 o'clock hand (1.3.26 ship vector
+     oversimplified to ring+wedge and lost Arc Clock silhouette).
+     Use #FF000000 only; system tints for themed icons. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Outer ring -->
+    <!-- Soft face disc -->
     <path
-        android:fillColor="#000000"
-        android:pathData="M54,24c-16.57,0 -30,13.43 -30,30s13.43,30 30,30 30,-13.43 30,-30 -13.43,-30 -30,-30zM54,78c-13.23,0 -24,-10.77 -24,-24s10.77,-24 24,-24 24,10.77 24,24 -10.77,24 -24,24z"/>
-    <!-- Hand (filled wedge toward 4:30) -->
+        android:fillColor="#29000000"
+        android:pathData="M54,24c-16.57,0 -30,13.43 -30,30s13.43,30 30,30 30,-13.43 30,-30 -13.43,-30 -30,-30z"/>
+    <!-- Progress arc -->
     <path
-        android:fillColor="#000000"
-        android:pathData="M54,54 L52,52 L65,74 L68,72 Z"/>
+        android:pathData="M24,54 A30,30 0 1,1 69,28.02"
+        android:strokeWidth="6.25"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"/>
+    <!-- Ticks -->
+    <path android:pathData="M54,29.8 L54,35.8" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M65.4,32.9 L62.6,37.6" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M73.6,41.6 L69.5,44.0" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M78.2,54 L72.2,54" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M73.6,66.4 L69.5,64.0" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M65.4,75.1 L62.6,70.4" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M54,78.2 L54,72.2" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M42.6,75.1 L45.4,70.4" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M34.4,66.4 L38.5,64.0" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M29.8,54 L35.8,54" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M34.4,41.6 L38.5,44.0" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M42.6,32.9 L45.4,37.6" android:strokeWidth="2.75" android:strokeColor="#FF000000" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <!-- Hand ~5 o'clock -->
+    <path
+        android:pathData="M54,54 L66.8,76.2"
+        android:strokeWidth="5.75"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"/>
     <!-- Hub -->
     <path
-        android:fillColor="#000000"
-        android:pathData="M54,49.8c-2.32,0 -4.2,1.88 -4.2,4.2s1.88,4.2 4.2,4.2 4.2,-1.88 4.2,-4.2 -1.88,-4.2 -4.2,-4.2z"/>
+        android:fillColor="#FF000000"
+        android:pathData="M54,49.4c-2.54,0 -4.6,2.06 -4.6,4.6s2.06,4.6 4.6,4.6 4.6,-2.06 4.6,-4.6 -2.06,-4.6 -4.6,-4.6z"/>
 </vector>

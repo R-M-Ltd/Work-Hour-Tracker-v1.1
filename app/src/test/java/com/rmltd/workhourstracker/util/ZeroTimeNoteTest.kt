@@ -136,4 +136,12 @@ class ZeroTimeNoteTest {
             ZeroTimeNote.UNSAVED_DRAFT_CAPTION
         )
     }
+
+    @Test
+    fun restoredUnsavedTimesToast_packCopy() {
+        assertEquals(
+            "Restored unsaved times",
+            ZeroTimeNote.RESTORED_UNSAVED_TIMES_TOAST
+        )
+    }
 }
