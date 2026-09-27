@@ -1,8 +1,15 @@
-# Cloud sync (1.3.34)
+# Cloud sync (1.3.35)
 
 Optional bidirectional sync of `DailyEntry` rows (including `hoursSource`, `noLunchTaken`)
 to **one** of: Google Drive, Dropbox, OneDrive. Default **off**. iCloud is not available
 on Android.
+
+## OAuth (authorization code + PKCE + refresh)
+
+Sign-in uses `response_type=code` with PKCE. Access + refresh tokens are stored in
+EncryptedSharedPreferences. Sync refreshes the access token before Sync now / on-resume
+and retries once on HTTP 401. If refresh fails, Settings shows **Session expired — sign
+in again to keep syncing.** with **Sign in again** (Sync now disabled until re-auth).
 
 ## local.properties keys (gitignored — never commit)
 

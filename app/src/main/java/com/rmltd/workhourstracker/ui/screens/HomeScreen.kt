@@ -216,97 +216,6 @@ fun HomeScreen(
         }
     }
 
-    fun performHomeManualSave(forceDiscard: Boolean = false) {
-        val start = homeInMinutes ?: return
-        val end = homeOutMinutes ?: return
-        val (lunchOut, lunchIn) = HomeManualTimes.lunchToPreserve(
-            todayEntry?.lunchOutMinutes,
-            todayEntry?.lunchInMinutes
-        )
-        val comments = homeCommentsDraft
-        if (forceDiscard) {
-            viewModel.discardOpenAndSaveEntry(
-                date = today,
-                clockInMinutes = start,
-                clockOutMinutes = end,
-                comments = comments,
-                lunchOutMinutes = lunchOut,
-                lunchInMinutes = lunchIn,
-                breakDurationMinutes = todayEntry?.breakDurationMinutes,
-                breakPaid = todayEntry?.breakPaid ?: false
-            ) {
-                HomeDraftPreferences.clear(context)
-                Toast.makeText(context, "Saved today's times", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            viewModel.saveEntry(
-                date = today,
-                clockInMinutes = start,
-                clockOutMinutes = end,
-                comments = comments,
-                lunchOutMinutes = lunchOut,
-                lunchInMinutes = lunchIn,
-                breakDurationMinutes = todayEntry?.breakDurationMinutes,
-                breakPaid = todayEntry?.breakPaid ?: false
-            ) { result ->
-                when (result) {
-                    is SaveEntryResult.Saved -> {
-                        HomeDraftPreferences.clear(context)
-                        Toast.makeText(context, "Saved today's times", Toast.LENGTH_SHORT).show()
-                    }
-                    is SaveEntryResult.BlockedOvernightOpen -> {
-                        manualOpenOvernightDate = result.openDate
-                        showManualBlockedOvernight = true
-                    }
-                }
-            }
-        }
-    }
-
-    fun tryHomeManualSave() {
-        val start = homeInMinutes
-        val end = homeOutMinutes
-        if (!HomeManualTimes.canSave(start, end)) {
-            Toast.makeText(context, "Set clock in and clock out", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (!ZeroTimeNote.canSaveWithNote(
-                homeCommentsDraft,
-                clockInMinutes = start,
-                clockOutMinutes = end
-            )
-        ) {
-            Toast.makeText(
-                context,
-                "Add a reason note for 12:00 AM (0) before saving",
-                Toast.LENGTH_SHORT
-            ).show()
-            return
-        }
-        val (lunchOut, lunchIn) = HomeManualTimes.lunchToPreserve(
-            todayEntry?.lunchOutMinutes,
-            todayEntry?.lunchInMinutes
-        )
-        val previewHours = HoursCalc.hoursWorked(
-            start!!,
-            end!!,
-            lunchOut,
-            lunchIn,
-            breakDurationMinutes = todayEntry?.breakDurationMinutes,
-            breakPaid = todayEntry?.breakPaid ?: false
-        )
-        if (ZeroTimeNote.needsZeroHoursReason(start, end, previewHours)) {
-            zeroHoursReasonText = ""
-            showZeroHoursDialog = true
-            return
-        }
-        if (HomeManualTimes.needsOvernightConfirm(start, end)) {
-            showManualOvernightConfirm = true
-        } else {
-            performHomeManualSave()
-        }
-    }
-
     fun performTypedSave(
         typed: Double,
         clockIn: Int?,
@@ -1150,13 +1059,6 @@ fun HomeScreen(
                                 )
                                 pendingTypedHours = null
                             }
-                        } else if (
-                            homeInMinutes != null && homeOutMinutes != null &&
-                            HomeManualTimes.needsOvernightConfirm(homeInMinutes!!, homeOutMinutes!!)
-                        ) {
-                            showManualOvernightConfirm = true
-                        } else {
-                            performHomeManualSave()
                         }
                     },
                     enabled = canConfirm,
@@ -1258,8 +1160,6 @@ fun HomeScreen(
                                 homeCommentsDraft, pendingNoLunch
                             )
                             pendingTypedHours = null
-                        } else {
-                            performHomeManualSave()
                         }
                     }
                 ) { Text("Save as overnight") }
@@ -1300,8 +1200,6 @@ fun HomeScreen(
                                     forceDiscard = true
                                 )
                                 pendingTypedHours = null
-                            } else {
-                                performHomeManualSave(forceDiscard = true)
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -1370,36 +1268,6 @@ private fun HomeClockPickerDialog(
             }
         }
     )
-}
-
-@Composable
-private fun HomeClockTimeRow(
-    label: String,
-    minutes: Int?,
-    enabled: Boolean = true,
-    onPick: () -> Unit
-) {
-    val cd = when (label) {
-        "Clock in" -> if (minutes == null) "Clock in time" else "Clock in time ${HoursCalc.formatClock(minutes)}"
-        "Clock out" -> if (minutes == null) "Clock out time" else "Clock out time ${HoursCalc.formatClock(minutes)}"
-        else -> label
-    }
-    OutlinedButton(
-        onClick = onPick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .semantics { contentDescription = cd }
-    ) {
-        Icon(Icons.Filled.Schedule, contentDescription = null)
-        Spacer(Modifier.width(8.dp))
-        Text(
-            if (minutes == null) label else "$label  ${HoursCalc.formatClock(minutes)}",
-            maxLines = 2,
-            softWrap = true
-        )
-    }
 }
 
 @Composable

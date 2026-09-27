@@ -71,11 +71,9 @@ fun AppNavHost(
             SettingsScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
-                onSetTodaysTimes = {
-                    navController.navigate(Routes.entry(LocalDate.now())) {
-                        popUpTo(Routes.HOME)
-                    }
-                },
+                // L2 1.3.35: Set today's times is hosted as AddChangeHoursSheet on Settings
+                // (not Routes.entry). Lunch CTA stays Entry nav-only.
+                onSetTodaysTimes = { /* sheet hosted inside SettingsScreen */ },
                 onLogLunch = {
                     navController.navigate(Routes.entry(LocalDate.now())) {
                         popUpTo(Routes.HOME)

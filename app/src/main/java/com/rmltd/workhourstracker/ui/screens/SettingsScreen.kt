@@ -54,6 +54,12 @@ import com.rmltd.workhourstracker.util.WeekUtils
 import com.rmltd.workhourstracker.worker.ReminderScheduler
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.rmltd.workhourstracker.data.SaveEntryResult
+import com.rmltd.workhourstracker.ui.components.AddChangeHoursResult
+import com.rmltd.workhourstracker.ui.components.AddChangeHoursSheet
+import com.rmltd.workhourstracker.ui.components.formatHoursField
+import com.rmltd.workhourstracker.util.HomeManualTimes
+import com.rmltd.workhourstracker.util.ZeroTimeNote
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.DayOfWeek
 import java.time.format.TextStyle
@@ -109,7 +115,25 @@ fun SettingsScreen(
     var cloudLastSync by remember { mutableStateOf(CloudSyncPreferences.getLastSyncEpochMillis(context)) }
     var cloudError by remember { mutableStateOf(CloudSyncPreferences.getLastError(context)) }
     var cloudBusy by remember { mutableStateOf(false) }
+    var cloudSigningIn by remember { mutableStateOf(false) }
+    var cloudSessionExpired by remember { mutableStateOf(CloudSyncPreferences.isSessionExpired(context)) }
     var showCloudSyncInfo by remember { mutableStateOf(false) }
+
+    // L2: Set today's times → AddChangeHoursSheet hosted on Settings
+    var showSetTodaysSheet by remember { mutableStateOf(false) }
+    var setTodaysTitle by remember { mutableStateOf("Set today's times") }
+    var sheetClockIn by remember { mutableStateOf<Int?>(null) }
+    var sheetClockOut by remember { mutableStateOf<Int?>(null) }
+    var sheetNote by remember { mutableStateOf("") }
+    var sheetNoLunch by remember { mutableStateOf(false) }
+    var sheetPickerField by remember { mutableStateOf<SettingsTodayClockField?>(null) }
+    var showSheetZeroDialog by remember { mutableStateOf(false) }
+    var sheetZeroReason by remember { mutableStateOf("") }
+    var pendingSheetTyped by remember { mutableStateOf<Double?>(null) }
+    var pendingSheetNoLunch by remember { mutableStateOf(false) }
+    var showSheetOvernightConfirm by remember { mutableStateOf(false) }
+    var showSheetBlockedOvernight by remember { mutableStateOf(false) }
+    var sheetOpenOvernightDate by remember { mutableStateOf<LocalDate?>(null) }
 
     fun refreshCloudState() {
         cloudSyncEnabled = CloudSyncPreferences.isEnabled(context)
@@ -118,8 +142,13 @@ fun SettingsScreen(
         cloudAccount = CloudSyncPreferences.getAccountName(context)
         cloudLastSync = CloudSyncPreferences.getLastSyncEpochMillis(context)
         cloudError = CloudSyncPreferences.getLastError(context)
+        cloudSessionExpired = CloudSyncPreferences.isSessionExpired(context)
+        cloudSigningIn = false
     }
     val scope = rememberCoroutineScope()
+    val weekEntries by viewModel.currentWeekEntries.collectAsState()
+    val today = LocalDate.now()
+    val todayEntry = viewModel.entryFor(today, weekEntries)
     val weekStart by viewModel.weekStart.collectAsState()
     var exactAlarmsAllowed by remember {
         mutableStateOf(ReminderScheduler.canScheduleExactAlarms(context))
@@ -146,6 +175,7 @@ fun SettingsScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 exactAlarmsAllowed = ReminderScheduler.canScheduleExactAlarms(context)
                 notificationsAllowed = ReminderScheduler.areNotificationsEnabled(context)
+                refreshCloudState()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -880,7 +910,17 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedButton(
-                        onClick = onSetTodaysTimes,
+                        onClick = {
+                            val hasHours = todayEntry?.hasPersistedHours() == true
+                            setTodaysTitle =
+                                if (hasHours) "Change hours" else "Set today's times"
+                            sheetClockIn = todayEntry?.clockInMinutes
+                            sheetClockOut = todayEntry?.clockOutMinutes
+                            sheetNote = todayEntry?.comments.orEmpty()
+                            sheetNoLunch = todayEntry?.noLunchTaken == true
+                            showSetTodaysSheet = true
+                            onSetTodaysTimes() // no-op from nav (sheet hosted here)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
@@ -998,51 +1038,114 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        if (!cloudError.isNullOrBlank()) {
+                        val sessionExpiredUi = cloudSessionExpired ||
+                            CloudSyncPreferences.isSessionExpiredSignal(cloudError, cloudSessionExpired)
+                        if (sessionExpiredUi && cloudSyncLinked) {
+                            Text(
+                                CloudSyncPreferences.SESSION_EXPIRED,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.semantics {
+                                    contentDescription = CloudSyncPreferences.SESSION_EXPIRED
+                                }
+                            )
+                        } else if (!cloudError.isNullOrBlank()) {
                             Text(
                                 cloudError!!,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
                         }
+                        if (cloudSigningIn) {
+                            Text(
+                                CloudSyncPreferences.SIGNING_IN,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        fun launchCloudSignIn() {
+                            val prov = cloudProvider
+                            if (prov == null) {
+                                Toast.makeText(context, "Choose a cloud first", Toast.LENGTH_SHORT).show()
+                                return
+                            }
+                            if (!CloudOAuthLauncher.isConfigured(prov)) {
+                                CloudSyncPreferences.setLastError(
+                                    context, CloudSyncPreferences.NOT_CONFIGURED
+                                )
+                                cloudError = CloudSyncPreferences.NOT_CONFIGURED
+                                Toast.makeText(
+                                    context,
+                                    CloudSyncPreferences.NOT_CONFIGURED,
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                return
+                            }
+                            val intent = CloudOAuthLauncher.authorizeIntent(context, prov)
+                            if (intent == null) {
+                                cloudError = CloudSyncPreferences.NOT_CONFIGURED
+                                Toast.makeText(
+                                    context,
+                                    CloudSyncPreferences.NOT_CONFIGURED,
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                cloudSigningIn = true
+                                context.startActivity(intent)
+                            }
+                        }
                         if (!cloudSyncLinked) {
                             Button(
-                                onClick = {
-                                    val prov = cloudProvider
-                                    if (prov == null) {
-                                        Toast.makeText(context, "Choose a cloud first", Toast.LENGTH_SHORT).show()
-                                        return@Button
-                                    }
-                                    if (!CloudOAuthLauncher.isConfigured(prov)) {
-                                        CloudSyncPreferences.setLastError(
-                                            context, CloudSyncPreferences.NOT_CONFIGURED
-                                        )
-                                        cloudError = CloudSyncPreferences.NOT_CONFIGURED
-                                        Toast.makeText(
-                                            context,
-                                            CloudSyncPreferences.NOT_CONFIGURED,
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                        return@Button
-                                    }
-                                    val intent = CloudOAuthLauncher.authorizeIntent(prov)
-                                    if (intent == null) {
-                                        cloudError = CloudSyncPreferences.NOT_CONFIGURED
-                                        Toast.makeText(
-                                            context,
-                                            CloudSyncPreferences.NOT_CONFIGURED,
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    } else {
-                                        context.startActivity(intent)
-                                    }
-                                },
-                                enabled = !cloudBusy,
+                                onClick = { launchCloudSignIn() },
+                                enabled = !cloudBusy && !cloudSigningIn,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 48.dp)
                                     .semantics { contentDescription = "Sign in to sync" }
                             ) { Text("Sign in") }
+                            Text(
+                                CloudSyncPreferences.AUTH_CODE_EDUCATION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else if (sessionExpiredUi) {
+                            Button(
+                                onClick = { launchCloudSignIn() },
+                                enabled = !cloudBusy && !cloudSigningIn,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .semantics { contentDescription = CloudSyncPreferences.SIGN_IN_AGAIN }
+                            ) { Text(CloudSyncPreferences.SIGN_IN_AGAIN) }
+                            Text(
+                                CloudSyncPreferences.AUTH_CODE_EDUCATION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Button(
+                                onClick = { },
+                                enabled = false,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .semantics { contentDescription = "Sync now" }
+                            ) { Text("Sync now") }
+                            OutlinedButton(
+                                onClick = {
+                                    CloudSyncPreferences.unlink(context)
+                                    refreshCloudState()
+                                    Toast.makeText(
+                                        context,
+                                        "Unlinked — local hours kept",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .semantics { contentDescription = "Unlink cloud" }
+                            ) { Text("Unlink (keep local)") }
                         } else {
                             Button(
                                 onClick = {
@@ -1056,6 +1159,12 @@ fun SettingsScreen(
                                                     Toast.makeText(context, "Synced", Toast.LENGTH_SHORT).show()
                                                 is CloudSyncEngine.SyncOutcome.Error ->
                                                     Toast.makeText(context, out.message, Toast.LENGTH_LONG).show()
+                                                is CloudSyncEngine.SyncOutcome.SessionExpired ->
+                                                    Toast.makeText(
+                                                        context,
+                                                        CloudSyncPreferences.SESSION_EXPIRED,
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
                                                 else ->
                                                     Toast.makeText(context, "Sync skipped", Toast.LENGTH_SHORT).show()
                                             }
@@ -1398,4 +1507,297 @@ fun SettingsScreen(
             }
         )
     }
+
+    fun performSettingsTypedSave(
+        typed: Double,
+        clockIn: Int?,
+        clockOut: Int?,
+        note: String,
+        noLunch: Boolean,
+        forceDiscard: Boolean = false
+    ) {
+        val lunchOut = if (noLunch) null else todayEntry?.lunchOutMinutes
+        val lunchIn = if (noLunch) null else todayEntry?.lunchInMinutes
+        val breakDur = if (noLunch) null else todayEntry?.breakDurationMinutes
+        if (forceDiscard) {
+            viewModel.discardOpenAndSaveEntry(
+                date = today,
+                clockInMinutes = clockIn,
+                clockOutMinutes = clockOut,
+                comments = note,
+                lunchOutMinutes = lunchOut,
+                lunchInMinutes = lunchIn,
+                breakDurationMinutes = breakDur,
+                breakPaid = todayEntry?.breakPaid ?: false,
+                typedHours = typed,
+                noLunchTaken = noLunch
+            ) {
+                showSetTodaysSheet = false
+                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            viewModel.saveEntry(
+                date = today,
+                clockInMinutes = clockIn,
+                clockOutMinutes = clockOut,
+                comments = note,
+                lunchOutMinutes = lunchOut,
+                lunchInMinutes = lunchIn,
+                breakDurationMinutes = breakDur,
+                breakPaid = todayEntry?.breakPaid ?: false,
+                typedHours = typed,
+                noLunchTaken = noLunch
+            ) { result ->
+                when (result) {
+                    is SaveEntryResult.Saved -> {
+                        showSetTodaysSheet = false
+                        Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                    }
+                    is SaveEntryResult.BlockedOvernightOpen -> {
+                        pendingSheetTyped = typed
+                        pendingSheetNoLunch = noLunch
+                        sheetClockIn = clockIn
+                        sheetClockOut = clockOut
+                        sheetNote = note
+                        sheetOpenOvernightDate = result.openDate
+                        showSheetBlockedOvernight = true
+                    }
+                }
+            }
+        }
+    }
+
+    fun onSettingsAddChangeSave(result: AddChangeHoursResult) {
+        sheetClockIn = result.clockInMinutes
+        sheetClockOut = result.clockOutMinutes
+        sheetNote = result.note
+        sheetNoLunch = result.noLunchTaken
+        if (ZeroTimeNote.needsZeroHoursReason(
+                result.clockInMinutes,
+                result.clockOutMinutes,
+                result.typedHours,
+                typedHours = result.typedHours
+            )
+        ) {
+            pendingSheetTyped = result.typedHours
+            pendingSheetNoLunch = result.noLunchTaken
+            sheetZeroReason = ""
+            showSheetZeroDialog = true
+            return
+        }
+        if (!ZeroTimeNote.canSaveWithNote(
+                result.note,
+                clockInMinutes = result.clockInMinutes,
+                clockOutMinutes = result.clockOutMinutes
+            )
+        ) {
+            Toast.makeText(
+                context,
+                "Add a reason note for 12:00 AM (0) before saving",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        val cin = result.clockInMinutes
+        val cout = result.clockOutMinutes
+        if (cin != null && cout != null && HomeManualTimes.needsOvernightConfirm(cin, cout)) {
+            pendingSheetTyped = result.typedHours
+            pendingSheetNoLunch = result.noLunchTaken
+            showSheetOvernightConfirm = true
+        } else {
+            performSettingsTypedSave(
+                result.typedHours,
+                result.clockInMinutes,
+                result.clockOutMinutes,
+                result.note,
+                result.noLunchTaken
+            )
+        }
+    }
+
+    if (showSetTodaysSheet) {
+        val seedHours = when {
+            todayEntry?.hasPersistedHours() == true ->
+                formatHoursField(todayEntry!!.hoursWorked)
+            else -> ""
+        }
+        AddChangeHoursSheet(
+            title = setTodaysTitle,
+            initialHours = seedHours,
+            initialClockIn = sheetClockIn,
+            initialClockOut = sheetClockOut,
+            initialNote = sheetNote,
+            initialNoLunchTaken = sheetNoLunch,
+            clockInMinutes = sheetClockIn,
+            clockOutMinutes = sheetClockOut,
+            onDismiss = { showSetTodaysSheet = false },
+            onSave = { onSettingsAddChangeSave(it) },
+            onPickClockIn = { sheetPickerField = SettingsTodayClockField.IN },
+            onPickClockOut = { sheetPickerField = SettingsTodayClockField.OUT }
+        )
+    }
+
+    sheetPickerField?.let { field ->
+        SettingsTodayClockPickerDialog(
+            field = field,
+            currentMinutes = if (field == SettingsTodayClockField.IN) sheetClockIn else sheetClockOut,
+            onConfirm = { mins ->
+                if (field == SettingsTodayClockField.IN) sheetClockIn = mins
+                else sheetClockOut = mins
+                sheetPickerField = null
+            },
+            onDismiss = { sheetPickerField = null }
+        )
+    }
+
+    if (showSheetZeroDialog) {
+        val canConfirm = sheetZeroReason.trim().isNotEmpty()
+        AlertDialog(
+            onDismissRequest = {
+                showSheetZeroDialog = false
+                sheetZeroReason = ""
+            },
+            title = { Text(ZeroTimeNote.ZERO_HOURS_TITLE) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(ZeroTimeNote.ZERO_HOURS_BODY)
+                    OutlinedTextField(
+                        value = sheetZeroReason,
+                        onValueChange = { if (it.length <= 500) sheetZeroReason = it },
+                        label = { Text(ZeroTimeNote.DIALOG_LABEL) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val reason = sheetZeroReason.trim()
+                        if (reason.isEmpty()) return@TextButton
+                        sheetNote = ZeroTimeNote.mergeZeroHoursIntoNote(sheetNote, reason)
+                        showSheetZeroDialog = false
+                        sheetZeroReason = ""
+                        val typed = pendingSheetTyped
+                        if (typed != null) {
+                            val cin = sheetClockIn
+                            val cout = sheetClockOut
+                            if (cin != null && cout != null &&
+                                HomeManualTimes.needsOvernightConfirm(cin, cout)
+                            ) {
+                                showSheetOvernightConfirm = true
+                            } else {
+                                performSettingsTypedSave(
+                                    typed, cin, cout, sheetNote, pendingSheetNoLunch
+                                )
+                                pendingSheetTyped = null
+                            }
+                        }
+                    },
+                    enabled = canConfirm
+                ) { Text(ZeroTimeNote.CONFIRM_LABEL) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showSheetZeroDialog = false
+                    sheetZeroReason = ""
+                }) { Text(ZeroTimeNote.DISMISS_LABEL) }
+            }
+        )
+    }
+
+    if (showSheetOvernightConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSheetOvernightConfirm = false },
+            title = { Text("Overnight shift?") },
+            text = {
+                Text("Clock out is earlier than clock in. Treat as overnight?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSheetOvernightConfirm = false
+                        val typed = pendingSheetTyped
+                        if (typed != null) {
+                            performSettingsTypedSave(
+                                typed, sheetClockIn, sheetClockOut,
+                                sheetNote, pendingSheetNoLunch
+                            )
+                            pendingSheetTyped = null
+                        }
+                    }
+                ) { Text("Save as overnight") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSheetOvernightConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showSheetBlockedOvernight) {
+        val openDay = sheetOpenOvernightDate ?: today.minusDays(1)
+        AlertDialog(
+            onDismissRequest = { showSheetBlockedOvernight = false },
+            title = { Text("Open overnight punch") },
+            text = {
+                Text(
+                    "Another day still has an open clock-in with no clock-out. " +
+                        "Finish that day first, or discard the open punch to save today."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showSheetBlockedOvernight = false }) { Text("Cancel") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showSheetBlockedOvernight = false
+                        val typed = pendingSheetTyped
+                        if (typed != null) {
+                            performSettingsTypedSave(
+                                typed, sheetClockIn, sheetClockOut,
+                                sheetNote, pendingSheetNoLunch,
+                                forceDiscard = true
+                            )
+                            pendingSheetTyped = null
+                        }
+                    }
+                ) { Text("Discard open punch & save") }
+            }
+        )
+    }
+}
+
+private enum class SettingsTodayClockField { IN, OUT }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsTodayClockPickerDialog(
+    field: SettingsTodayClockField,
+    currentMinutes: Int?,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val initial = currentMinutes ?: HomeManualTimes.defaultPickerMinutes(field == SettingsTodayClockField.IN)
+    val state = rememberTimePickerState(
+        initialHour = initial / 60,
+        initialMinute = initial % 60,
+        is24Hour = false
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour * 60 + state.minute) }) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        title = {
+            Text(if (field == SettingsTodayClockField.IN) "Clock in" else "Clock out")
+        },
+        text = {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TimePicker(state = state)
+            }
+        }
+    )
 }

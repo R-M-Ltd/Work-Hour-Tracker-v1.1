@@ -101,13 +101,21 @@ class MainActivity : ComponentActivity() {
     private fun handleOAuthIntent(intent: Intent?) {
         val uri = intent?.data ?: return
         if (uri.scheme != "com.rmltd.workhourstracker" || uri.host != "oauth") return
-        val provider = CloudSyncPreferences.getProvider(this) ?: return
-        val ok = CloudOAuthLauncher.applyAuthRedirect(this, uri, provider)
-        Toast.makeText(
-            this,
-            if (ok) "Cloud linked" else "Sign-in did not return a token",
-            Toast.LENGTH_SHORT
-        ).show()
+        val provider = CloudSyncPreferences.getProvider(this)
+            ?: CloudSyncPreferences.getPendingPkceProvider(this)
+            ?: return
+        ioScope.launch {
+            val ok = runCatching {
+                CloudOAuthLauncher.applyAuthRedirect(this@MainActivity, uri, provider)
+            }.getOrDefault(false)
+            runOnUiThread {
+                Toast.makeText(
+                    this@MainActivity,
+                    if (ok) "Cloud linked" else "Sign-in did not return a token",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 
     override fun onStart() {

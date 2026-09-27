@@ -9,6 +9,9 @@ import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
+/** Thrown when a provider API returns HTTP 401 — caller should refresh and retry. */
+class CloudAuthExpiredException(message: String = "Unauthorized") : Exception(message)
+
 internal object DriveRest {
     private const val FILES = "https://www.googleapis.com/drive/v3/files"
     private const val UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
@@ -64,9 +67,12 @@ internal object DropboxRest {
         conn.setRequestProperty("Authorization", "Bearer $accessToken")
         conn.setRequestProperty("Dropbox-API-Arg", JSONObject().put("path", path).toString())
         return try {
-            if (conn.responseCode in 200..299) read(conn) else null
-        } catch (_: Exception) {
-            null
+            val code = conn.responseCode
+            when {
+                code in 200..299 -> read(conn)
+                code == 401 -> throw CloudAuthExpiredException("HTTP 401")
+                else -> null
+            }
         } finally {
             conn.disconnect()
         }
@@ -90,6 +96,7 @@ internal object DropboxRest {
         OutputStreamWriter(conn.outputStream, StandardCharsets.UTF_8).use { it.write(body) }
         val code = conn.responseCode
         conn.disconnect()
+        if (code == 401) throw CloudAuthExpiredException("HTTP 401")
         if (code !in 200..299) error("Dropbox upload failed: $code")
     }
 }
@@ -111,9 +118,12 @@ private fun httpGet(url: String, accessToken: String): String? {
     conn.requestMethod = "GET"
     conn.setRequestProperty("Authorization", "Bearer $accessToken")
     return try {
-        if (conn.responseCode in 200..299) read(conn) else null
-    } catch (_: Exception) {
-        null
+        val code = conn.responseCode
+        when {
+            code in 200..299 -> read(conn)
+            code == 401 -> throw CloudAuthExpiredException("HTTP 401")
+            else -> null
+        }
     } finally {
         conn.disconnect()
     }
@@ -128,6 +138,7 @@ private fun httpPutBinary(url: String, accessToken: String, body: String, mime: 
     OutputStreamWriter(conn.outputStream, StandardCharsets.UTF_8).use { it.write(body) }
     val code = conn.responseCode
     conn.disconnect()
+    if (code == 401) throw CloudAuthExpiredException("HTTP 401")
     if (code !in 200..299) error("Upload failed: $code")
 }
 
@@ -140,6 +151,7 @@ private fun httpPatchBinary(url: String, accessToken: String, body: String, mime
     OutputStreamWriter(conn.outputStream, StandardCharsets.UTF_8).use { it.write(body) }
     val code = conn.responseCode
     conn.disconnect()
+    if (code == 401) throw CloudAuthExpiredException("HTTP 401")
     if (code !in 200..299) error("Patch failed: $code")
 }
 
@@ -168,6 +180,7 @@ private fun httpMultipartUpload(
     }
     val code = conn.responseCode
     conn.disconnect()
+    if (code == 401) throw CloudAuthExpiredException("HTTP 401")
     if (code !in 200..299) error("Multipart upload failed: $code")
 }
 
