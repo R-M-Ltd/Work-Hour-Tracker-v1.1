@@ -110,7 +110,8 @@ fun EntryScreen(
         clockInMinutes, clockOutMinutes, lunchOutMinutes, lunchInMinutes,
         breakDurationMinutes, breakPaid
     ) {
-        if (clockInMinutes != null && clockOutMinutes != null && clockInMinutes != clockOutMinutes) {
+        // equalOutMeansFullDay defaults false so in==out → 0.00h (manual zero day).
+        if (clockInMinutes != null && clockOutMinutes != null) {
             HoursCalc.worked(
                 clockInMinutes!!,
                 clockOutMinutes!!,
@@ -197,8 +198,6 @@ fun EntryScreen(
         val end = clockOutMinutes
         if (start == null || end == null) {
             Toast.makeText(context, "Set clock in and clock out", Toast.LENGTH_SHORT).show()
-        } else if (start == end) {
-            Toast.makeText(context, "Clock out must be a different time than clock in", Toast.LENGTH_SHORT).show()
         } else if (!ZeroTimeNote.canSaveWithNote(
                 comments,
                 clockInMinutes = start,
@@ -213,6 +212,7 @@ fun EntryScreen(
                 Toast.LENGTH_SHORT
             ).show()
         } else if (ZeroTimeNote.needsZeroHoursReason(start, end, worked?.hours)) {
+            // Equal in/out or break-eats-shift → Reason for 0 hours? (1.3.33)
             zeroHoursReasonText = ""
             showZeroHoursDialog = true
         } else if (HoursCalc.isOvernight(start, end)) {
@@ -493,6 +493,8 @@ fun EntryScreen(
                         when {
                             worked == null ->
                                 "Set clock in and clock out. Break/lunch is optional and unpaid by default."
+                            worked.hours == 0.0 ->
+                                ZeroTimeNote.ZERO_HOURS_SAVE_CAPTION
                             worked.lunchApplied && worked.overnight ->
                                 "Overnight shift minus break. Rounded to hundredths."
                             worked.lunchApplied ->
@@ -544,8 +546,7 @@ fun EntryScreen(
                 enabled = entryLoadDone &&
                     !clockBusy &&
                     clockInMinutes != null &&
-                    clockOutMinutes != null &&
-                    clockInMinutes != clockOutMinutes,
+                    clockOutMinutes != null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)

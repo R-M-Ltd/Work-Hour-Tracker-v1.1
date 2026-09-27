@@ -123,10 +123,24 @@ class ZeroTimeNoteTest {
 
     @Test
     fun needsZeroHoursReason_secondaryGate() {
+        // Positive hours, in≠out → no gate
         assertFalse(ZeroTimeNote.needsZeroHoursReason(480, 1020, 8.0))
+        // Break-eats-shift: in≠out but hours 0 → gate
         assertTrue(ZeroTimeNote.needsZeroHoursReason(480, 1020, 0.0))
-        assertFalse(ZeroTimeNote.needsZeroHoursReason(480, 480, 0.0))
+        // 1.3.33: equal times → gate (intentional 0.00h day), even if hours null
+        assertTrue(ZeroTimeNote.needsZeroHoursReason(480, 480, 0.0))
+        assertTrue(ZeroTimeNote.needsZeroHoursReason(480, 480, null))
+        assertTrue(ZeroTimeNote.needsZeroHoursReason(0, 0, 0.0))
         assertFalse(ZeroTimeNote.needsZeroHoursReason(null, 1020, 0.0))
+        assertFalse(ZeroTimeNote.needsZeroHoursReason(480, null, 0.0))
+    }
+
+    @Test
+    fun zeroHoursSaveCaption_packCopy() {
+        assertEquals(
+            "0.00h — Save will ask for a short reason",
+            ZeroTimeNote.ZERO_HOURS_SAVE_CAPTION
+        )
     }
 
     @Test

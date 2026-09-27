@@ -6,11 +6,9 @@ package com.rmltd.workhourstracker.util
  */
 object HomeManualTimes {
 
-    /** Both clocks set and not identical wall times (same rule as Entry Save enablement). */
+    /** Both clocks set (equal wall times allowed — intentional 0.00h day, 1.3.33). */
     fun canSave(clockInMinutes: Int?, clockOutMinutes: Int?): Boolean =
-        clockInMinutes != null &&
-            clockOutMinutes != null &&
-            clockInMinutes != clockOutMinutes
+        clockInMinutes != null && clockOutMinutes != null
 
     /** True when out is earlier than in (or equal-out full-day is not used on Home manual save). */
     fun needsOvernightConfirm(clockInMinutes: Int, clockOutMinutes: Int): Boolean =

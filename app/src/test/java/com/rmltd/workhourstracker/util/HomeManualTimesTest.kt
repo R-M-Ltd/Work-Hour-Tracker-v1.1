@@ -15,11 +15,12 @@ class HomeManualTimesTest {
     private val halfPastNoon = 12 * 60 + 30
 
     @Test
-    fun canSave_requiresBothDistinct() {
+    fun canSave_requiresBoth_allowsEqual() {
         assertFalse(HomeManualTimes.canSave(null, null))
         assertFalse(HomeManualTimes.canSave(nineAm, null))
         assertFalse(HomeManualTimes.canSave(null, fivePm))
-        assertFalse(HomeManualTimes.canSave(nineAm, nineAm))
+        // 1.3.33: equal wall times OK (intentional 0.00h day)
+        assertTrue(HomeManualTimes.canSave(nineAm, nineAm))
         assertTrue(HomeManualTimes.canSave(nineAm, fivePm))
         assertTrue(HomeManualTimes.canSave(tenPm, sixAm))
     }
@@ -50,16 +51,17 @@ class HomeManualTimesTest {
         // Distinct wall times at day edges are savable (overnight or near-full day).
         assertTrue(HomeManualTimes.canSave(0, 1))
         assertTrue(HomeManualTimes.canSave(23 * 60 + 59, 0))
-        assertFalse(HomeManualTimes.canSave(0, 0))
-        assertFalse(HomeManualTimes.canSave(23 * 60 + 59, 23 * 60 + 59))
+        // 1.3.33: equal midnight / last-minute also savable as 0.00h day
+        assertTrue(HomeManualTimes.canSave(0, 0))
+        assertTrue(HomeManualTimes.canSave(23 * 60 + 59, 23 * 60 + 59))
     }
 
     @Test
     fun needsOvernightConfirm_oneMinutePastMidnight() {
         assertTrue(HomeManualTimes.needsOvernightConfirm(23 * 60 + 59, 0))
         assertFalse(HomeManualTimes.needsOvernightConfirm(0, 23 * 60 + 59))
-        // Equal wall: Home manual save rejects via canSave; confirm stays false
-        // (equalOutMeansFullDay is clock-out path only, not Home pickers).
+        // Equal wall: not overnight on Home manual (equalOutMeansFullDay false);
+        // zero-day path uses needsZeroHoursReason instead.
         assertFalse(HomeManualTimes.needsOvernightConfirm(22 * 60, 22 * 60))
     }
 

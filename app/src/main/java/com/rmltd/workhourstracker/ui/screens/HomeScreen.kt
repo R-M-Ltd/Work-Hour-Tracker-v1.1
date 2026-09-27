@@ -801,6 +801,38 @@ fun HomeScreen(
                                     softWrap = true
                                 )
                             }
+                            // Optional honesty when preview is 0.00h (equal in/out or break-eats-shift).
+                            run {
+                                val hin = homeInMinutes
+                                val hout = homeOutMinutes
+                                if (hin != null && hout != null) {
+                                    val (lo, li) = HomeManualTimes.lunchToPreserve(
+                                        todayEntry?.lunchOutMinutes,
+                                        todayEntry?.lunchInMinutes
+                                    )
+                                    val preview = HoursCalc.hoursWorked(
+                                        hin,
+                                        hout,
+                                        lo,
+                                        li,
+                                        breakDurationMinutes = todayEntry?.breakDurationMinutes,
+                                        breakPaid = todayEntry?.breakPaid ?: false
+                                    )
+                                    if (preview == 0.0) {
+                                        Text(
+                                            ZeroTimeNote.ZERO_HOURS_SAVE_CAPTION,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .padding(top = 4.dp)
+                                                .semantics {
+                                                    contentDescription =
+                                                        ZeroTimeNote.ZERO_HOURS_SAVE_CAPTION
+                                                }
+                                        )
+                                    }
+                                }
+                            }
                             Text(
                                 "Same save rules as Edit day (overnight guards). Existing break kept; edit day to change.",
                                 style = MaterialTheme.typography.labelSmall,
@@ -831,7 +863,9 @@ fun HomeScreen(
                 }
                 DayRow(
                     date = date,
-                    hours = entry?.hoursWorked,
+                    // Only closed days (both clocks) expose hours — open punches stay 0.0 in Room
+                    // but must not read as a saved 0.00h day (1.3.33).
+                    hours = entry?.takeIf { it.clockOutMinutes != null }?.hoursWorked,
                     clockLabel = partialLabel,
                     hasEntry = entry != null,
                     comments = entry?.comments,
@@ -1339,12 +1373,13 @@ private fun DayRow(
             }
             val dayName = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
             val actionLabel = when {
-                hours != null && hours > 0.0 -> formatHours(hours)
+                // Include 0.00h closed days (equal in/out zero day, 1.3.33)
+                hours != null -> formatHours(hours)
                 hasEntry -> "Edit"
                 else -> "Add"
             }
             val actionCd = when {
-                hours != null && hours > 0.0 ->
+                hours != null ->
                     "${formatHours(hours)} hours, edit $dayName"
                 hasEntry -> "Edit $dayName"
                 else -> "Add hours for $dayName"

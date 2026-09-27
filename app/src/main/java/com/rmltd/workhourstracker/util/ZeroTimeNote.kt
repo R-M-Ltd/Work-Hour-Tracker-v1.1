@@ -26,6 +26,9 @@ object ZeroTimeNote {
     const val ZERO_HOURS_BODY =
         "This day would save as 0 hours. Add a short reason — it is saved as today’s note."
 
+    /** Optional honesty caption when preview hours are 0.00 with both clocks set. */
+    const val ZERO_HOURS_SAVE_CAPTION = "0.00h — Save will ask for a short reason"
+
     /** True when [minutes] is exactly midnight (0 minutes from midnight). */
     fun needsReason(minutes: Int?): Boolean = minutes != null && minutes == 0
 
@@ -118,14 +121,17 @@ object ZeroTimeNote {
         return "$e\n$line"
     }
 
-    /** Secondary gate: Save would store 0.00h with both clocks set and unequal. */
+    /**
+     * Secondary gate: Save would store 0.00h with both clocks set.
+     * True for intentional equal in/out (zero day) OR break-eats-shift (in≠out, hours 0).
+     */
     fun needsZeroHoursReason(
         clockInMinutes: Int?,
         clockOutMinutes: Int?,
         hoursWorked: Double?
     ): Boolean {
         if (clockInMinutes == null || clockOutMinutes == null) return false
-        if (clockInMinutes == clockOutMinutes) return false
+        if (clockInMinutes == clockOutMinutes) return true
         return hoursWorked != null && hoursWorked == 0.0
     }
 }
