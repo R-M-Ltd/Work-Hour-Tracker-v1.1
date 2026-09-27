@@ -82,23 +82,25 @@ fun HomeScreen(
     var zeroHoursReasonText by remember { mutableStateOf("") }
 
     val todayEntry = viewModel.entryFor(today, entries)
-    // Key IN only on date + Room IN (not OUT) so open-punch IN persist does not
-    // wipe a locally picked OUT (S-A). Key OUT only on date + Room OUT.
+    // D6: Key local Home state on stable today.toEpochDay() (not todayEntry?.dateEpochDay)
+    // so empty-day OUT/IN/draft survive START_OPEN when Room creates today's row
+    // (null→epoch wipe). Secondary keys stay on Room IN / OUT / comments.
+    // Do not reintroduce clockInMinutes as an OUT key.
     var homeInMinutes by remember(
-        todayEntry?.dateEpochDay,
+        today.toEpochDay(),
         todayEntry?.clockInMinutes
     ) {
         mutableStateOf(todayEntry?.clockInMinutes)
     }
     var homeOutMinutes by remember(
-        todayEntry?.dateEpochDay,
+        today.toEpochDay(),
         todayEntry?.clockOutMinutes
     ) {
         mutableStateOf(todayEntry?.clockOutMinutes)
     }
     // Stash note locally until Save / atomic punch write (LOCAL_ONLY + OUT midnight).
     var homeCommentsDraft by remember(
-        todayEntry?.dateEpochDay,
+        today.toEpochDay(),
         todayEntry?.comments
     ) {
         mutableStateOf(todayEntry?.comments.orEmpty())

@@ -379,6 +379,9 @@ class WorkHoursRepository(
                     breakPaid = today.breakPaid
                 )
                 refreshWeekArchiveIfPresent(date)
+                // D7: same silent drain as overnight — leftover non-today opens
+                // after any successful close (no new toast / Home UI).
+                drainLeftoverOpens(skipDate = date, outMinutes = minutes)
             }
             ClockOutResult.SUCCESS_OVERNIGHT -> {
                 // Prefer yesterday overnight; else close orphan open on an older day.
@@ -402,30 +405,39 @@ class WorkHoursRepository(
                     breakPaid = target.breakPaid
                 )
                 refreshWeekArchiveIfPresent(targetDate)
-                // S-C harden: corrupt multi-open — after closing the preferred
-                // overnight/orphan target, close any remaining older/newer opens
-                // at the same out minutes so Home is not left with a leftover open.
-                while (true) {
-                    val leftover = dao.findOpenEntry() ?: break
-                    if (leftover.dateEpochDay == date.toEpochDay()) break
-                    val leftoverIn = leftover.clockInMinutes ?: break
-                    val leftoverDate = LocalDate.ofEpochDay(leftover.dateEpochDay)
-                    upsertClosedEntry(
-                        date = leftoverDate,
-                        clockInMinutes = leftoverIn,
-                        clockOutMinutes = minutes,
-                        comments = leftover.comments,
-                        lunchOutMinutes = leftover.lunchOutMinutes,
-                        lunchInMinutes = leftover.lunchInMinutes,
-                        equalOutMeansFullDay = leftoverIn == minutes,
-                        breakDurationMinutes = leftover.breakDurationMinutes,
-                        breakPaid = leftover.breakPaid
-                    )
-                    refreshWeekArchiveIfPresent(leftoverDate)
-                }
+                // S-C / D7: corrupt multi-open — drain remaining non-today opens
+                // at the same wall-clock OUT (S3: no orphan-naming toast).
+                drainLeftoverOpens(skipDate = date, outMinutes = minutes)
             }
         }
         decision
+    }
+
+    /**
+     * Close leftover open punches that are not on [skipDate], using [outMinutes]
+     * as wall-clock OUT. Shared by SUCCESS and SUCCESS_OVERNIGHT (D7). Silent —
+     * callers must not toast per orphan (S3). Skips today so a same-day open is
+     * never drained by this helper.
+     */
+    private suspend fun drainLeftoverOpens(skipDate: LocalDate, outMinutes: Int) {
+        while (true) {
+            val leftover = dao.findOpenEntry() ?: break
+            if (leftover.dateEpochDay == skipDate.toEpochDay()) break
+            val leftoverIn = leftover.clockInMinutes ?: break
+            val leftoverDate = LocalDate.ofEpochDay(leftover.dateEpochDay)
+            upsertClosedEntry(
+                date = leftoverDate,
+                clockInMinutes = leftoverIn,
+                clockOutMinutes = outMinutes,
+                comments = leftover.comments,
+                lunchOutMinutes = leftover.lunchOutMinutes,
+                lunchInMinutes = leftover.lunchInMinutes,
+                equalOutMeansFullDay = leftoverIn == outMinutes,
+                breakDurationMinutes = leftover.breakDurationMinutes,
+                breakPaid = leftover.breakPaid
+            )
+            refreshWeekArchiveIfPresent(leftoverDate)
+        }
     }
 
     /** Week logs with meaningful hours only (empty 0.0 archives are hidden). */

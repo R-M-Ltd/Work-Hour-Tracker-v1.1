@@ -158,4 +158,38 @@ class WorkHoursRepositoryClockInPersistTest {
         assertEquals(outAt, o.clockOutMinutes)
         assertNull(repo.findOpenEntryOnce())
     }
+
+    @Test
+    fun clockOutNow_success_drainsLeftoverNonTodayOpens() = runBlocking {
+        // D7: same-day SUCCESS must also drain leftover non-today opens (silent).
+        val (dao, repo) = newRepo()
+        val older = today.minusDays(3)
+        val outAt = 17 * 60
+        dao.upsertEntry(
+            DailyEntry(
+                dateEpochDay = older.toEpochDay(),
+                hoursWorked = 0.0,
+                comments = "",
+                weekStartEpochDay = older.toEpochDay(),
+                clockInMinutes = nineAm,
+                clockOutMinutes = null
+            )
+        )
+        dao.upsertEntry(
+            DailyEntry(
+                dateEpochDay = today.toEpochDay(),
+                hoursWorked = 0.0,
+                comments = "",
+                weekStartEpochDay = today.toEpochDay(),
+                clockInMinutes = nineAm,
+                clockOutMinutes = null
+            )
+        )
+        assertEquals(ClockOutResult.SUCCESS, repo.clockOutNow(today, outAt))
+        val t = repo.entryForDateOnce(today)!!
+        assertEquals(outAt, t.clockOutMinutes)
+        val o = repo.entryForDateOnce(older)!!
+        assertEquals(outAt, o.clockOutMinutes)
+        assertNull(repo.findOpenEntryOnce())
+    }
 }

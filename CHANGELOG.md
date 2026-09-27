@@ -3,6 +3,18 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.29] — versionCode 31
+
+Arthur QA residuals from 1.3.28 + Ivan UI pack `ui-rebuild-1.3.29` (baseline `2212e94`):
+
+- **D6 empty-day OUT survives START_OPEN:** Re-key `homeOutMinutes` / `homeInMinutes` / `homeCommentsDraft` on stable `today.toEpochDay()` (not `todayEntry?.dateEpochDay`) so null→epoch on first open-punch IN does not wipe local OUT. No new chrome.
+- **D7 silent drain after SUCCESS:** Share `drainLeftoverOpens` after any successful close (`SUCCESS` and `SUCCESS_OVERNIGHT`); skip today; no new toast / Home UI.
+- **S1 unsaved caption:** Keep `Not saved yet — tap Save today's times` (no SavedInstanceState this release).
+- **S2 Arc Clock:** No new assets — device-verify splash `#5B3F9E` + monochrome only.
+- **S3 orphan OUT:** Drained orphans get same wall-clock OUT; no orphan-naming toast.
+- Protected: Lunch CTA nav-only, EOD 8pm / Extend 1h, CSV/PDF, locked hexes + Aqua, cloud sync off / no OAuth.
+- Version 1.3.29 / versionCode 31.
+
 ## [1.3.28] — versionCode 30
 
 QA residuals from Arthur 1.3.27 + Ivan UI pack `ui-rebuild-1.3.28` (baseline `7b1bf5c`):
