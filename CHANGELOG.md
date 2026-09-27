@@ -3,6 +3,17 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.26] — versionCode 28
+
+Two CoS smoke fixes on 1.3.25 plus Ivan UI pack `ui-rebuild-1.3.26` + Arc Clock icon pack (Benjamin pick):
+
+- **Clock in now persistence:** Home TimePicker IN alone now persists an open punch via `clockInAt` / `updateOpenClockIn` (same Room shape as Clock in now). Eager `homeInMinutes` sync on `STARTED`. Repo regression with in-memory DAO.
+- **Zero time → reason note:** Confirming **12:00 AM** (`minutes == 0`) on Home Clock in/out and Entry Clock in/out / Break start/end opens pack AlertDialog (`Reason for 12:00 AM?`). **Save reason** applies 0 + appends `12:00 AM ({field}): {reason}` into `DailyEntry.comments`. **Cancel** reverts (never leaves 12:00 AM). Empty reason blocks confirm.
+- **Clocked-in chips:** Home Today card `Clocked in · {time}` when open; Entry `Open shift · clocked in {time}` when in set / out null.
+- **Arc Clock launcher + splash:** Adaptive `@mipmap/ic_launcher` (+ round); SplashScreen API purple `#5B3F9E` + foreground mark; Manifest activity uses Splash theme; `installSplashScreen()` in MainActivity.
+- Protected: Lunch CTA nav-only, EOD/CSV/locked hexes (incl. Aqua), cloud sync off-by-default / no OAuth. Punch Ring assets not used.
+- Version 1.3.26 / versionCode 28.
+
 ## [1.3.25] — versionCode 27
 
 Five deltas from Ivan UI pack `ui-rebuild-1.3.25` (baseline 1.3.24 / `2b8f1da`):

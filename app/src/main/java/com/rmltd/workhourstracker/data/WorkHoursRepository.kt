@@ -294,6 +294,24 @@ class WorkHoursRepository(
     }
 
     /**
+     * Update clock-in minutes on an already-open row for [date].
+     * No-op (false) when the day is not open. Preserves comments / lunch / break.
+     */
+    suspend fun updateOpenClockIn(date: LocalDate, minutes: Int): Boolean = clockMutex.withLock {
+        val existing = dao.entryForDateOnce(date.toEpochDay()) ?: return@withLock false
+        if (existing.clockInMinutes == null || existing.clockOutMinutes != null) return@withLock false
+        dao.upsertEntry(
+            existing.copy(
+                clockInMinutes = minutes,
+                hoursWorked = 0.0,
+                clockOutMinutes = null,
+                updatedAtEpochMillis = System.currentTimeMillis()
+            )
+        )
+        true
+    }
+
+    /**
      * One-tap clock-out for [date] at [minutes].
      * Open today → close today. Empty today + yesterday open → finish overnight.
      * Closed today → no write. Empty with no overnight → FAILED.

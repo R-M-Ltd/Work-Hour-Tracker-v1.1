@@ -24,7 +24,8 @@
     <application
         android:name=".WorkHoursApplication"
         android:allowBackup="true"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@style/Theme.WorkHoursTracker"
         android:supportsRtl="true">
@@ -32,7 +33,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.WorkHoursTracker">
+            android:theme="@style/Theme.WorkHoursTracker.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.util.EntryFormSeed
 import com.rmltd.workhourstracker.util.HoursCalc
+import com.rmltd.workhourstracker.util.ZeroTimeNote
 import com.rmltd.workhourstracker.util.VoiceShiftParser
 import com.rmltd.workhourstracker.util.extractClockMinutes
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
@@ -68,6 +69,9 @@ fun EntryScreen(
     var comments by remember(date) { mutableStateOf("") }
     var entryLoadDone by remember(date) { mutableStateOf(false) }
     var pickerField by remember { mutableStateOf<ClockField?>(null) }
+    var pendingZeroField by remember { mutableStateOf<ClockField?>(null) }
+    var pendingZeroMinutes by remember { mutableStateOf<Int?>(null) }
+    var zeroReasonText by remember { mutableStateOf("") }
 
     LaunchedEffect(date) {
         entryLoadDone = false
@@ -155,6 +159,37 @@ fun EntryScreen(
         }
     }
 
+    fun fieldLabel(field: ClockField): String = when (field) {
+        ClockField.IN -> "Clock in"
+        ClockField.OUT -> "Clock out"
+        ClockField.LUNCH_OUT -> "Break start"
+        ClockField.LUNCH_IN -> "Break end"
+    }
+
+    fun applyEntryClockMinutes(field: ClockField, minutes: Int, reasonNote: String? = null) {
+        when (field) {
+            ClockField.IN -> clockInMinutes = minutes
+            ClockField.LUNCH_OUT -> lunchOutMinutes = minutes
+            ClockField.LUNCH_IN -> lunchInMinutes = minutes
+            ClockField.OUT -> clockOutMinutes = minutes
+        }
+        if (reasonNote != null && reasonNote.isNotBlank()) {
+            comments = ZeroTimeNote.mergeReasonIntoNote(comments, fieldLabel(field), reasonNote)
+        }
+    }
+
+    fun onEntryTimePicked(field: ClockField, minutes: Int) {
+        if (ZeroTimeNote.needsReason(minutes)) {
+            pendingZeroField = field
+            pendingZeroMinutes = minutes
+            zeroReasonText = ""
+            pickerField = null
+        } else {
+            applyEntryClockMinutes(field, minutes)
+            pickerField = null
+        }
+    }
+
     fun trySave() {
         val start = clockInMinutes
         val end = clockOutMinutes
@@ -162,6 +197,19 @@ fun EntryScreen(
             Toast.makeText(context, "Set clock in and clock out", Toast.LENGTH_SHORT).show()
         } else if (start == end) {
             Toast.makeText(context, "Clock out must be a different time than clock in", Toast.LENGTH_SHORT).show()
+        } else if (!ZeroTimeNote.canSaveWithNote(
+                comments,
+                clockInMinutes = start,
+                clockOutMinutes = end,
+                lunchOutMinutes = lunchOutMinutes,
+                lunchInMinutes = lunchInMinutes
+            )
+        ) {
+            Toast.makeText(
+                context,
+                "Add a reason note for 12:00 AM (0) before saving",
+                Toast.LENGTH_SHORT
+            ).show()
         } else if (HoursCalc.isOvernight(start, end)) {
             showOvernightConfirm = true
         } else {
@@ -215,19 +263,14 @@ fun EntryScreen(
             is VoiceMode.Field -> {
                 val parsed = extractClockMinutes(spoken)
                 if (parsed != null) {
-                    when (mode.field) {
-                        ClockField.IN -> clockInMinutes = parsed
-                        ClockField.LUNCH_OUT -> lunchOutMinutes = parsed
-                        ClockField.LUNCH_IN -> lunchInMinutes = parsed
+                    val resolved = when (mode.field) {
                         ClockField.OUT -> {
                             val cin = clockInMinutes
-                            clockOutMinutes = if (cin != null) {
-                                VoiceShiftParser.resolveOutAgainstIn(cin, parsed)
-                            } else {
-                                parsed
-                            }
+                            if (cin != null) VoiceShiftParser.resolveOutAgainstIn(cin, parsed) else parsed
                         }
+                        else -> parsed
                     }
+                    onEntryTimePicked(mode.field, resolved)
                 } else {
                     Toast.makeText(context, "Didn't catch a time — heard: \"$spoken\"", Toast.LENGTH_LONG).show()
                 }
@@ -269,6 +312,26 @@ fun EntryScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+                if (clockInMinutes != null && clockOutMinutes == null) {
+                    val inLabel = HoursCalc.formatClock(clockInMinutes!!)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                contentDescription = "Open shift, clocked in at $inLabel"
+                            }
+                    ) {
+                        Text(
+                            "Open shift · clocked in $inLabel",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                        )
+                    }
+                }
             // Shift: voice + clock in / out
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -496,16 +559,72 @@ fun EntryScreen(
         ClockPickerDialog(
             field = field,
             currentMinutes = minutesFor(field, clockInMinutes, lunchOutMinutes, lunchInMinutes, clockOutMinutes),
-            onConfirm = { minutes ->
-                when (field) {
-                    ClockField.IN -> clockInMinutes = minutes
-                    ClockField.LUNCH_OUT -> lunchOutMinutes = minutes
-                    ClockField.LUNCH_IN -> lunchInMinutes = minutes
-                    ClockField.OUT -> clockOutMinutes = minutes
-                }
-                pickerField = null
-            },
+            onConfirm = { minutes -> onEntryTimePicked(field, minutes) },
             onDismiss = { pickerField = null }
+        )
+    }
+
+    pendingZeroField?.let { field ->
+        val minutes = pendingZeroMinutes ?: 0
+        val label = fieldLabel(field)
+        val canConfirm = zeroReasonText.trim().isNotEmpty()
+        AlertDialog(
+            onDismissRequest = {
+                // Cancel / dismiss: revert — do not apply minutes == 0
+                pendingZeroField = null
+                pendingZeroMinutes = null
+                zeroReasonText = ""
+            },
+            title = { Text(ZeroTimeNote.DIALOG_TITLE) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(ZeroTimeNote.dialogBody(label))
+                    OutlinedTextField(
+                        value = zeroReasonText,
+                        onValueChange = { if (it.length <= 500) zeroReasonText = it },
+                        label = { Text(ZeroTimeNote.DIALOG_LABEL) },
+                        placeholder = { Text(ZeroTimeNote.DIALOG_PLACEHOLDER) },
+                        supportingText = {
+                            Text(
+                                if (!canConfirm) ZeroTimeNote.EMPTY_ERROR
+                                else "${zeroReasonText.length}/500"
+                            )
+                        },
+                        isError = !canConfirm,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = ZeroTimeNote.DIALOG_LABEL }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val reason = zeroReasonText.trim()
+                        if (reason.isEmpty()) return@TextButton
+                        pendingZeroField = null
+                        pendingZeroMinutes = null
+                        zeroReasonText = ""
+                        applyEntryClockMinutes(field, minutes, reason)
+                    },
+                    enabled = canConfirm,
+                    modifier = Modifier.semantics {
+                        contentDescription = ZeroTimeNote.CONFIRM_LABEL
+                    }
+                ) { Text(ZeroTimeNote.CONFIRM_LABEL) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingZeroField = null
+                        pendingZeroMinutes = null
+                        zeroReasonText = ""
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = ZeroTimeNote.DISMISS_LABEL
+                    }
+                ) { Text(ZeroTimeNote.DISMISS_LABEL) }
+            }
         )
     }
 

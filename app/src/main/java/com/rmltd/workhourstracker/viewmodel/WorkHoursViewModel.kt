@@ -195,15 +195,47 @@ class WorkHoursViewModel(
      * Ignores overlapping taps while a clock op is in flight (M2).
      */
     fun clockInNow(date: LocalDate = LocalDate.now(), onResult: (ClockInResult) -> Unit = {}) {
+        val now = LocalTime.now()
+        clockInAt(date, now.hour * 60 + now.minute, onResult)
+    }
+
+    /**
+     * Clock in at a chosen wall time (Home TimePicker open-punch path, or "now").
+     * Same single-flight guards as [clockInNow].
+     */
+    fun clockInAt(
+        date: LocalDate = LocalDate.now(),
+        minutes: Int,
+        onResult: (ClockInResult) -> Unit = {}
+    ) {
         if (!clockFlight.compareAndSet(false, true)) return
         _clockOpInProgress.value = true
-        val now = LocalTime.now()
-        val minutes = now.hour * 60 + now.minute
         viewModelScope.launch {
             try {
                 clockFlightMutex.withLock {
                     val result = repository.clockInNow(date, minutes)
                     onResult(result)
+                }
+            } finally {
+                clockFlight.set(false)
+                _clockOpInProgress.value = false
+                refreshHomeWidget()
+            }
+        }
+    }
+
+    /** Update clock-in on an already-open day (Home TimePicker while OPEN). */
+    fun updateOpenClockIn(
+        date: LocalDate = LocalDate.now(),
+        minutes: Int,
+        onDone: (Boolean) -> Unit = {}
+    ) {
+        if (!clockFlight.compareAndSet(false, true)) return
+        _clockOpInProgress.value = true
+        viewModelScope.launch {
+            try {
+                clockFlightMutex.withLock {
+                    onDone(repository.updateOpenClockIn(date, minutes))
                 }
             } finally {
                 clockFlight.set(false)

@@ -30,6 +30,8 @@ import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.util.ClockHaptics
 import com.rmltd.workhourstracker.util.HomeManualTimes
+import com.rmltd.workhourstracker.util.HomeOpenPunch
+import com.rmltd.workhourstracker.util.ZeroTimeNote
 import com.rmltd.workhourstracker.util.HomeOvernightCopy
 import com.rmltd.workhourstracker.util.PayEstimate
 import com.rmltd.workhourstracker.util.HoursCalc
@@ -72,6 +74,9 @@ fun HomeScreen(
     var manualOpenOvernightDate by remember { mutableStateOf<LocalDate?>(null) }
     var homePickerField by remember { mutableStateOf<HomeClockField?>(null) }
     var showForgotClockOut by remember { mutableStateOf(false) }
+    var pendingZeroField by remember { mutableStateOf<HomeClockField?>(null) }
+    var pendingZeroMinutes by remember { mutableStateOf<Int?>(null) }
+    var zeroReasonText by remember { mutableStateOf("") }
 
     val todayEntry = viewModel.entryFor(today, entries)
     var homeInMinutes by remember(
@@ -141,10 +146,100 @@ fun HomeScreen(
             Toast.makeText(context, "Set clock in and clock out", Toast.LENGTH_SHORT).show()
             return
         }
+        if (!ZeroTimeNote.canSaveWithNote(
+                todayEntry?.comments.orEmpty(),
+                clockInMinutes = start,
+                clockOutMinutes = end
+            )
+        ) {
+            Toast.makeText(
+                context,
+                "Add a reason note for 12:00 AM (0) before saving",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
         if (HomeManualTimes.needsOvernightConfirm(start!!, end!!)) {
             showManualOvernightConfirm = true
         } else {
             performHomeManualSave()
+        }
+    }
+
+
+    fun applyHomeClockMinutes(field: HomeClockField, minutes: Int, reasonNote: String? = null) {
+        when (field) {
+            HomeClockField.IN -> {
+                homeInMinutes = minutes
+                val action = HomeOpenPunch.decide(
+                    todayIn = todayEntry?.clockInMinutes,
+                    todayOut = todayEntry?.clockOutMinutes,
+                    todayHoursWorked = todayEntry?.hoursWorked ?: 0.0
+                )
+                val comments = if (reasonNote != null) {
+                    ZeroTimeNote.mergeReasonIntoNote(
+                        todayEntry?.comments.orEmpty(),
+                        "Clock in",
+                        reasonNote
+                    )
+                } else {
+                    todayEntry?.comments.orEmpty()
+                }
+                when (action) {
+                    HomeOpenPunch.Action.START_OPEN -> {
+                        viewModel.clockInAt(today, minutes) { result ->
+                            if (result == ClockInResult.STARTED) {
+                                homeInMinutes = minutes
+                                if (reasonNote != null && reasonNote.isNotBlank()) {
+                                    viewModel.updateEntryComments(today, comments)
+                                }
+                                Toast.makeText(context, "Clock-in saved", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                    HomeOpenPunch.Action.UPDATE_OPEN -> {
+                        viewModel.updateOpenClockIn(today, minutes) { ok ->
+                            if (ok) {
+                                homeInMinutes = minutes
+                                if (reasonNote != null && reasonNote.isNotBlank()) {
+                                    viewModel.updateEntryComments(today, comments)
+                                }
+                                Toast.makeText(context, "Clock-in updated", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                    HomeOpenPunch.Action.LOCAL_ONLY -> {
+                        // Closed day: keep local until Save today's times; stash note into comments on save.
+                        if (reasonNote != null && reasonNote.isNotBlank()) {
+                            // Merge into a remembered note by updating comments on existing closed row immediately.
+                            viewModel.updateEntryComments(today, comments)
+                        }
+                    }
+                }
+            }
+            HomeClockField.OUT -> {
+                homeOutMinutes = minutes
+                if (reasonNote != null && reasonNote.isNotBlank()) {
+                    val comments = ZeroTimeNote.mergeReasonIntoNote(
+                        todayEntry?.comments.orEmpty(),
+                        "Clock out",
+                        reasonNote
+                    )
+                    viewModel.updateEntryComments(today, comments)
+                }
+            }
+        }
+    }
+
+    fun onHomeTimePicked(field: HomeClockField, minutes: Int) {
+        if (ZeroTimeNote.needsReason(minutes)) {
+            pendingZeroField = field
+            pendingZeroMinutes = minutes
+            zeroReasonText = ""
+            homePickerField = null
+        } else {
+            applyHomeClockMinutes(field, minutes)
+            homePickerField = null
         }
     }
 
@@ -285,6 +380,30 @@ fun HomeScreen(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            val todayOpenChip = todayEntry?.clockInMinutes != null &&
+                                todayEntry?.clockOutMinutes == null &&
+                                !homeClock.overnightPending
+                            if (todayOpenChip) {
+                                val inLabel = HoursCalc.formatClock(todayEntry!!.clockInMinutes!!)
+                                Spacer(Modifier.height(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .semantics {
+                                            contentDescription = "Clocked in at $inLabel"
+                                        }
+                                ) {
+                                    Text(
+                                        "Clocked in · $inLabel",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                    )
+                                }
+                            }
                             Spacer(Modifier.height(8.dp))
                             if (homeClock.overnightPending) {
                                 Surface(
@@ -312,12 +431,14 @@ fun HomeScreen(
                                             showOvernightDialog = true
                                             return@Button
                                         }
+                                        val nowMins = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
                                         viewModel.clockInNow(today) { result ->
                                             when (result) {
                                                 ClockInResult.BLOCKED_OVERNIGHT -> {
                                                     showOvernightDialog = true
                                                 }
                                                 ClockInResult.STARTED -> {
+                                                    homeInMinutes = nowMins
                                                     ClockHaptics.performSuccess(view)
                                                     Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
                                                 }
@@ -620,14 +741,76 @@ fun HomeScreen(
                 HomeClockField.IN -> homeInMinutes
                 HomeClockField.OUT -> homeOutMinutes
             },
-            onConfirm = { minutes ->
-                when (field) {
-                    HomeClockField.IN -> homeInMinutes = minutes
-                    HomeClockField.OUT -> homeOutMinutes = minutes
-                }
-                homePickerField = null
-            },
+            onConfirm = { minutes -> onHomeTimePicked(field, minutes) },
             onDismiss = { homePickerField = null }
+        )
+    }
+
+    pendingZeroField?.let { field ->
+        val minutes = pendingZeroMinutes ?: 0
+        val fieldLabel = when (field) {
+            HomeClockField.IN -> "Clock in"
+            HomeClockField.OUT -> "Clock out"
+        }
+        val canConfirm = zeroReasonText.trim().isNotEmpty()
+        AlertDialog(
+            onDismissRequest = {
+                // Cancel / dismiss: revert — never apply minutes == 0
+                pendingZeroField = null
+                pendingZeroMinutes = null
+                zeroReasonText = ""
+            },
+            title = { Text(ZeroTimeNote.DIALOG_TITLE) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(ZeroTimeNote.dialogBody(fieldLabel))
+                    OutlinedTextField(
+                        value = zeroReasonText,
+                        onValueChange = { if (it.length <= 500) zeroReasonText = it },
+                        label = { Text(ZeroTimeNote.DIALOG_LABEL) },
+                        placeholder = { Text(ZeroTimeNote.DIALOG_PLACEHOLDER) },
+                        supportingText = {
+                            Text(
+                                if (!canConfirm && zeroReasonText.isNotEmpty()) ZeroTimeNote.EMPTY_ERROR
+                                else if (!canConfirm) ZeroTimeNote.EMPTY_ERROR
+                                else "${zeroReasonText.length}/500"
+                            )
+                        },
+                        isError = zeroReasonText.isNotEmpty() && !canConfirm,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = ZeroTimeNote.DIALOG_LABEL }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val reason = zeroReasonText.trim()
+                        if (reason.isEmpty()) return@TextButton
+                        pendingZeroField = null
+                        pendingZeroMinutes = null
+                        zeroReasonText = ""
+                        applyHomeClockMinutes(field, minutes, reason)
+                    },
+                    enabled = canConfirm,
+                    modifier = Modifier.semantics {
+                        contentDescription = ZeroTimeNote.CONFIRM_LABEL
+                    }
+                ) { Text(ZeroTimeNote.CONFIRM_LABEL) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingZeroField = null
+                        pendingZeroMinutes = null
+                        zeroReasonText = ""
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = ZeroTimeNote.DISMISS_LABEL
+                    }
+                ) { Text(ZeroTimeNote.DISMISS_LABEL) }
+            }
         )
     }
 
