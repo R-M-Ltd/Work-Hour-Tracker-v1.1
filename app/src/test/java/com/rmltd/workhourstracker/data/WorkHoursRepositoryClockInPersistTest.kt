@@ -192,4 +192,39 @@ class WorkHoursRepositoryClockInPersistTest {
         assertEquals(outAt, o.clockOutMinutes)
         assertNull(repo.findOpenEntryOnce())
     }
+
+    /** D1-a: closed-day Room write notifies onDayFullySaved (stash clear hook). */
+    @Test
+    fun saveEntry_invokesOnDayFullySaved() = runBlocking {
+        val dao = FakeWorkHoursDao()
+        val saved = mutableListOf<LocalDate>()
+        val repo = WorkHoursRepository(
+            dao,
+            weekStartDay = { DayOfWeek.WEDNESDAY },
+            onDayFullySaved = { saved.add(it) }
+        )
+        val result = repo.saveEntry(
+            date = today,
+            clockInMinutes = nineAm,
+            clockOutMinutes = tenAm + 7 * 60,
+            comments = "entry"
+        )
+        assertEquals(SaveEntryResult.Saved, result)
+        assertEquals(listOf(today), saved)
+    }
+
+    @Test
+    fun clockOutSuccess_invokesOnDayFullySaved() = runBlocking {
+        val dao = FakeWorkHoursDao()
+        val saved = mutableListOf<LocalDate>()
+        val repo = WorkHoursRepository(
+            dao,
+            weekStartDay = { DayOfWeek.WEDNESDAY },
+            onDayFullySaved = { saved.add(it) }
+        )
+        assertEquals(ClockInResult.STARTED, repo.clockInNow(today, nineAm))
+        assertTrue(saved.isEmpty()) // open punch must not clear draft
+        assertEquals(ClockOutResult.SUCCESS, repo.clockOutNow(today, tenAm))
+        assertEquals(listOf(today), saved)
+    }
 }

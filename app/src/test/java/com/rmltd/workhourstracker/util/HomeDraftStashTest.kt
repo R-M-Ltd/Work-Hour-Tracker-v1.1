@@ -53,7 +53,10 @@ class HomeDraftStashTest {
     fun decideRestore_nullStash_none() {
         assertEquals(
             HomeDraftRestoreDecision.None,
-            HomeDraftStash.decideRestore(null, today, null, null, "")
+            HomeDraftStash.decideRestore(
+                null, today, null, null, "",
+                null, null, ""
+            )
         )
     }
 
@@ -62,7 +65,10 @@ class HomeDraftStashTest {
         val stash = HomeDraftSnapshot(today - 1, 480, 0, "old")
         assertEquals(
             HomeDraftRestoreDecision.ClearStaleDay,
-            HomeDraftStash.decideRestore(stash, today, null, null, "")
+            HomeDraftStash.decideRestore(
+                stash, today, null, null, "",
+                null, null, ""
+            )
         )
     }
 
@@ -71,7 +77,10 @@ class HomeDraftStashTest {
         val stash = HomeDraftSnapshot(today, 480, 0, "mid")
         assertEquals(
             HomeDraftRestoreDecision.None,
-            HomeDraftStash.decideRestore(stash, today, 480, 0, "mid")
+            HomeDraftStash.decideRestore(
+                stash, today, 480, 0, "mid",
+                480, null, ""
+            )
         )
     }
 
@@ -80,7 +89,10 @@ class HomeDraftStashTest {
         val stash = HomeDraftSnapshot(today, null, null, "")
         assertEquals(
             HomeDraftRestoreDecision.None,
-            HomeDraftStash.decideRestore(stash, today, null, null, "")
+            HomeDraftStash.decideRestore(
+                stash, today, null, null, "",
+                null, null, ""
+            )
         )
     }
 
@@ -98,7 +110,10 @@ class HomeDraftStashTest {
             todayEpochDay = today,
             localIn = 480,
             localOut = null,
-            localComments = ""
+            localComments = "",
+            roomIn = 480,
+            roomOut = null,
+            roomComments = ""
         )
         assertEquals(HomeDraftRestoreDecision.Apply(stash), decision)
     }
@@ -106,9 +121,85 @@ class HomeDraftStashTest {
     @Test
     fun decideRestore_appliesFullDraftWhenLocalEmpty() {
         val stash = HomeDraftSnapshot(today, 540, 1020, "note")
+        // Locals still Room-seeded (empty day); stash dirty vs Room
         val decision = HomeDraftStash.decideRestore(
-            stash, today, null, null, ""
+            stash, today, null, null, "",
+            null, null, ""
         )
         assertEquals(HomeDraftRestoreDecision.Apply(stash), decision)
+    }
+
+    /**
+     * D1: Entry save updates Room then D1-a clears stash — Home sees null stash.
+     * (If stash were still present with local==Room, decideRestore would Apply;
+     * clearing on day-save is what prevents the clobber.)
+     */
+    @Test
+    fun decideRestore_afterEntrySaveClearedStash_none() {
+        assertEquals(
+            HomeDraftRestoreDecision.None,
+            HomeDraftStash.decideRestore(
+                stash = null,
+                todayEpochDay = today,
+                localIn = 480,
+                localOut = 1020,
+                localComments = "entry note",
+                roomIn = 480,
+                roomOut = 1020,
+                roomComments = "entry note"
+            )
+        )
+    }
+
+    /** D1: local already diverged from Room (user editing) while Room ≠ stash → clear. */
+    @Test
+    fun decideRestore_roomDiffersFromStash_localDirty_clears() {
+        val stash = HomeDraftSnapshot(today, 480, 0, "old")
+        val decision = HomeDraftStash.decideRestore(
+            stash = stash,
+            todayEpochDay = today,
+            localIn = 480,
+            localOut = 900,
+            localComments = "editing",
+            roomIn = 480,
+            roomOut = 1020,
+            roomComments = "saved"
+        )
+        assertEquals(HomeDraftRestoreDecision.ClearStaleDraft, decision)
+    }
+
+    /** D2: whitespace-only comment drift must not Apply when trimmed equal. */
+    @Test
+    fun decideRestore_whitespaceOnlyComment_none() {
+        val stash = HomeDraftSnapshot(today, 480, 1020, "note ")
+        val decision = HomeDraftStash.decideRestore(
+            stash = stash,
+            todayEpochDay = today,
+            localIn = 480,
+            localOut = 1020,
+            localComments = "note",
+            roomIn = 480,
+            roomOut = 1020,
+            roomComments = "note"
+        )
+        assertEquals(HomeDraftRestoreDecision.None, decision)
+    }
+
+    /** D2: trim also gates Apply when stash/local comments differ only by spaces. */
+    @Test
+    fun decideRestore_stashVsLocalTrimEqual_noneEvenIfRoomDiffers() {
+        // stash == local after trim → None (user already has draft applied / editing)
+        val stash = HomeDraftSnapshot(today, 480, 0, "  mid  ")
+        val decision = HomeDraftStash.decideRestore(
+            stash = stash,
+            todayEpochDay = today,
+            localIn = 480,
+            localOut = 0,
+            localComments = "mid",
+            roomIn = 480,
+            roomOut = null,
+            roomComments = ""
+        )
+        assertEquals(HomeDraftRestoreDecision.None, decision)
     }
 }

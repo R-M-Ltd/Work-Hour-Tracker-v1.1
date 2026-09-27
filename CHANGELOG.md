@@ -3,6 +3,16 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.31] — versionCode 33
+
+Arthur QA D1/D2/D3 from 1.3.30 + Ivan UI pack `ui-rebuild-1.3.31` (baseline `0d7d4bc`):
+
+- **D1 Room-aware Home draft:** `decideRestore` Apply + toast `Restored unsaved times` only when locals still equal Room and stash is dirty vs Room; otherwise clear stash silently (`ClearStaleDraft`). Clear `HomeDraftPreferences` on any successful closed-day Room write (`upsertClosedEntry` → saveEntry / discard-save / clock-close / drain). Acceptance: Home dirty → Entry Save → return Home must not toast or overwrite Entry times. Caption unchanged.
+- **D2 comment trim:** `decideRestore` comment equality uses `trim()` like `isDirty`; whitespace-only drift no longer Applies.
+- **D3 monochrome opaque silhouette:** Drop soft `#29000000` face; opaque `#FF000000` arc/ticks/hand/hub only. FG/splash/`#5B3F9E` untouched.
+- Protected: Lunch CTA nav-only, EOD 8pm / Extend 1h, CSV/PDF, locked hexes, cloud sync off / no OAuth. No Punch Ring.
+- Version 1.3.31 / versionCode 33.
+
 ## [1.3.30] — versionCode 32
 
 Arthur QA Suspected from 1.3.29 + Ivan UI pack `ui-rebuild-1.3.30` (baseline `c1a7d25`):

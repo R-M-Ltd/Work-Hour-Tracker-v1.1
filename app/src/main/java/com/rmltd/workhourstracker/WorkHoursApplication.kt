@@ -1,6 +1,7 @@
 package com.rmltd.workhourstracker
 
 import android.app.Application
+import com.rmltd.workhourstracker.data.HomeDraftPreferences
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.data.WorkHoursDatabase
 import com.rmltd.workhourstracker.data.WorkHoursRepository
@@ -18,7 +19,10 @@ class WorkHoursApplication : Application() {
     val repository: WorkHoursRepository by lazy {
         WorkHoursRepository(
             dao = WorkHoursDatabase.getInstance(this).workHoursDao(),
-            weekStartDay = { ReminderPreferences.getWeekStartDay(this) }
+            weekStartDay = { ReminderPreferences.getWeekStartDay(this) },
+            onDayFullySaved = { date ->
+                HomeDraftPreferences.clearIfEpochDay(this, date.toEpochDay())
+            }
         )
     }
 

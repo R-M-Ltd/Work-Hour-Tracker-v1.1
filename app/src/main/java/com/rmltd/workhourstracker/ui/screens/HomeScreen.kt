@@ -124,15 +124,23 @@ fun HomeScreen(
         todayEntry?.comments
     ) {
         val todayEpoch = today.toEpochDay()
+        val roomIn = todayEntry?.clockInMinutes
+        val roomOut = todayEntry?.clockOutMinutes
+        val roomComments = todayEntry?.comments.orEmpty()
         val decision = HomeDraftStash.decideRestore(
             stash = HomeDraftPreferences.load(context),
             todayEpochDay = todayEpoch,
             localIn = homeInMinutes,
             localOut = homeOutMinutes,
-            localComments = homeCommentsDraft
+            localComments = homeCommentsDraft,
+            roomIn = roomIn,
+            roomOut = roomOut,
+            roomComments = roomComments
         )
         when (decision) {
-            is HomeDraftRestoreDecision.ClearStaleDay -> {
+            is HomeDraftRestoreDecision.ClearStaleDay,
+            is HomeDraftRestoreDecision.ClearStaleDraft -> {
+                // Stale day or Room already won (Entry/other save) — silent clear.
                 HomeDraftPreferences.clear(context)
             }
             is HomeDraftRestoreDecision.Apply -> {

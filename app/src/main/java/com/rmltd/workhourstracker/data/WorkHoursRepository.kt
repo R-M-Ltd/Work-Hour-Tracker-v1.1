@@ -58,7 +58,9 @@ data class HomeClockUi(
 
 class WorkHoursRepository(
     private val dao: WorkHoursDao,
-    private val weekStartDay: () -> DayOfWeek = { DayOfWeek.WEDNESDAY }
+    private val weekStartDay: () -> DayOfWeek = { DayOfWeek.WEDNESDAY },
+    /** D1: clear Home draft stash after any authoritative closed-day Room write. */
+    private val onDayFullySaved: (LocalDate) -> Unit = {}
 ) {
 
     private val clockMutex = Mutex()
@@ -187,6 +189,9 @@ class WorkHoursRepository(
                 breakPaid = paid
             )
         )
+        // D1: any successful closed-day persist clears Home draft for that epoch
+        // (saveEntry / discard-save / clock-close / drain leftovers).
+        onDayFullySaved(date)
     }
 
     /** Keep History week totals accurate after editing an already-archived day. */

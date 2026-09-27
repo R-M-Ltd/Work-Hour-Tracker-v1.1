@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Arc Clock monochrome polish 1.3.30 — API 33+ themed adaptive icons.
+<!-- Arc Clock monochrome — 1.3.31 D3.
      Drop-in for res/drawable/ic_launcher_monochrome.xml.
-     Restores progress arc + 12 ticks + ~5 o'clock hand (1.3.26 ship vector
-     oversimplified to ring+wedge and lost Arc Clock silhouette).
-     Use #FF000000 only; system tints for themed icons. -->
+     D3: remove soft alpha face (#29000000). All mark paths #FF000000 only.
+     Opaque filled face would hide ticks/arc/hand under single-tint monochrome;
+     system themed-icon mask/background is the plate. Arc Clock = arc + 12 ticks
+     + ~5 o'clock hand + hub (opaque silhouette). Do not touch FG/splash/#5B3F9E. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Soft face disc -->
-    <path
-        android:fillColor="#29000000"
-        android:pathData="M54,24c-16.57,0 -30,13.43 -30,30s13.43,30 30,30 30,-13.43 30,-30 -13.43,-30 -30,-30z"/>
     <!-- Progress arc -->
     <path
         android:pathData="M24,54 A30,30 0 1,1 69,28.02"
