@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
@@ -226,5 +227,43 @@ class WorkHoursRepositoryClockInPersistTest {
         assertTrue(saved.isEmpty()) // open punch must not clear draft
         assertEquals(ClockOutResult.SUCCESS, repo.clockOutNow(today, tenAm))
         assertEquals(listOf(today), saved)
+    }
+
+    /** D4: comments-only upsert clears Home draft via onDayFullySaved. */
+    @Test
+    fun updateEntryComments_success_invokesOnDayFullySaved() = runBlocking {
+        val dao = FakeWorkHoursDao()
+        val saved = mutableListOf<LocalDate>()
+        val repo = WorkHoursRepository(
+            dao,
+            weekStartDay = { DayOfWeek.WEDNESDAY },
+            onDayFullySaved = { saved.add(it) }
+        )
+        dao.upsertEntry(
+            DailyEntry(
+                dateEpochDay = today.toEpochDay(),
+                hoursWorked = 8.0,
+                comments = "old",
+                weekStartEpochDay = today.toEpochDay(),
+                clockInMinutes = nineAm,
+                clockOutMinutes = tenAm + 7 * 60
+            )
+        )
+        assertTrue(repo.updateEntryComments(today, "new note"))
+        assertEquals(listOf(today), saved)
+        assertEquals("new note", repo.entryForDateOnce(today)!!.comments)
+    }
+
+    @Test
+    fun updateEntryComments_missingRow_doesNotInvokeOnDayFullySaved() = runBlocking {
+        val dao = FakeWorkHoursDao()
+        val saved = mutableListOf<LocalDate>()
+        val repo = WorkHoursRepository(
+            dao,
+            weekStartDay = { DayOfWeek.WEDNESDAY },
+            onDayFullySaved = { saved.add(it) }
+        )
+        assertFalse(repo.updateEntryComments(today, "orphan"))
+        assertTrue(saved.isEmpty())
     }
 }

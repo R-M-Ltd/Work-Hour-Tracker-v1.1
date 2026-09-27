@@ -3,6 +3,14 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.32] — versionCode 34
+
+Arthur QA D4 from 1.3.31 + Ivan UI pack `ui-rebuild-1.3.32` (baseline `755f3e9`):
+
+- **D4 comments-only clears Home draft:** After successful `updateEntryComments` upsert, call `onDayFullySaved(date)` so `HomeDraftPreferences.clearIfEpochDay` runs (same Application hook as `upsertClosedEntry`). Missing row still returns false with no clear. Keeps `UNSAVED_DRAFT_CAPTION` and Apply-only `Restored unsaved times` latch from 1.3.31. Acceptance: Home dirty stash → Log/History comments-only save → return Home → no false restore toast, no clobber.
+- Protected: Lunch CTA nav-only, EOD 8pm / Extend 1h, CSV/PDF, locked hexes, cloud sync off / no OAuth, Arc Clock FG/splash/`#5B3F9E`, opaque mono (D3), D1–D3 / D6 / D7. No new chrome.
+- Version 1.3.32 / versionCode 34.
+
 ## [1.3.31] — versionCode 33
 
 Arthur QA D1/D2/D3 from 1.3.30 + Ivan UI pack `ui-rebuild-1.3.31` (baseline `0d7d4bc`):

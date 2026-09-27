@@ -555,6 +555,9 @@ class WorkHoursRepository(
                 updatedAtEpochMillis = System.currentTimeMillis()
             )
         )
+        // D4: comments-only day write is authoritative for that epoch — clear Home draft
+        // (same Application hook as upsertClosedEntry → HomeDraftPreferences.clearIfEpochDay).
+        onDayFullySaved(date)
         true
     }
 
