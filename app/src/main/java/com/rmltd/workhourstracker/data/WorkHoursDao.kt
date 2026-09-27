@@ -33,14 +33,14 @@ interface WorkHoursDao {
     /** Open punch: clock-in set, no clock-out (overnight or same-day open). */
     @Query(
         "SELECT * FROM daily_entries WHERE clockInMinutes IS NOT NULL AND clockOutMinutes IS NULL " +
-            "ORDER BY dateEpochDay DESC LIMIT 1"
+            "ORDER BY dateEpochDay ASC LIMIT 1"
     )
     suspend fun findOpenEntry(): DailyEntry?
 
     /** Observable open punch for Home / widget overnight nudge. */
     @Query(
         "SELECT * FROM daily_entries WHERE clockInMinutes IS NOT NULL AND clockOutMinutes IS NULL " +
-            "ORDER BY dateEpochDay DESC LIMIT 1"
+            "ORDER BY dateEpochDay ASC LIMIT 1"
     )
     fun observeOpenEntry(): Flow<DailyEntry?>
 

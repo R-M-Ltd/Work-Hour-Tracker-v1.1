@@ -40,6 +40,36 @@ class ZeroTimeNoteTest {
     }
 
     @Test
+    fun mergeReasonIntoNote_dedupesOnlyFullLine_notBareReasonSubstring() {
+        val existing = "Site opened early for delivery"
+        // Bare reason "early" must NOT suppress appending the formatted midnight line.
+        val merged = ZeroTimeNote.mergeReasonIntoNote(existing, "Clock in", "early")
+        assertEquals(
+            "Site opened early for delivery\n12:00 AM (Clock in): early",
+            merged
+        )
+        // Full line already present → no second append
+        assertEquals(
+            merged,
+            ZeroTimeNote.mergeReasonIntoNote(merged, "Clock in", "early")
+        )
+    }
+
+    @Test
+    fun mergeZeroHoursIntoNote_formatAndDedupe() {
+        assertEquals(
+            "0 hours: unpaid training day",
+            ZeroTimeNote.mergeZeroHoursIntoNote("", "unpaid training day")
+        )
+        assertEquals(
+            "Note\n0 hours: unpaid training day",
+            ZeroTimeNote.mergeZeroHoursIntoNote("Note", "unpaid training day")
+        )
+        val once = ZeroTimeNote.mergeZeroHoursIntoNote("Note", "unpaid training day")
+        assertEquals(once, ZeroTimeNote.mergeZeroHoursIntoNote(once, "unpaid training day"))
+    }
+
+    @Test
     fun canSaveWithNote_requiresNonBlankWhenMidnightPresent() {
         assertTrue(ZeroTimeNote.canSaveWithNote("", 480, 1020))
         assertFalse(ZeroTimeNote.canSaveWithNote("", 0, 1020))

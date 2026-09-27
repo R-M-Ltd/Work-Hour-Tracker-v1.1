@@ -196,7 +196,7 @@ class WorkHoursViewModel(
      */
     fun clockInNow(date: LocalDate = LocalDate.now(), onResult: (ClockInResult) -> Unit = {}) {
         val now = LocalTime.now()
-        clockInAt(date, now.hour * 60 + now.minute, onResult)
+        clockInAt(date, now.hour * 60 + now.minute, onResult = onResult)
     }
 
     /**
@@ -206,14 +206,18 @@ class WorkHoursViewModel(
     fun clockInAt(
         date: LocalDate = LocalDate.now(),
         minutes: Int,
+        comments: String? = null,
         onResult: (ClockInResult) -> Unit = {}
     ) {
-        if (!clockFlight.compareAndSet(false, true)) return
+        if (!clockFlight.compareAndSet(false, true)) {
+            onResult(ClockInResult.BUSY)
+            return
+        }
         _clockOpInProgress.value = true
         viewModelScope.launch {
             try {
                 clockFlightMutex.withLock {
-                    val result = repository.clockInNow(date, minutes)
+                    val result = repository.clockInNow(date, minutes, comments)
                     onResult(result)
                 }
             } finally {
@@ -228,14 +232,18 @@ class WorkHoursViewModel(
     fun updateOpenClockIn(
         date: LocalDate = LocalDate.now(),
         minutes: Int,
+        comments: String? = null,
         onDone: (Boolean) -> Unit = {}
     ) {
-        if (!clockFlight.compareAndSet(false, true)) return
+        if (!clockFlight.compareAndSet(false, true)) {
+            onDone(false)
+            return
+        }
         _clockOpInProgress.value = true
         viewModelScope.launch {
             try {
                 clockFlightMutex.withLock {
-                    onDone(repository.updateOpenClockIn(date, minutes))
+                    onDone(repository.updateOpenClockIn(date, minutes, comments))
                 }
             } finally {
                 clockFlight.set(false)
@@ -262,7 +270,10 @@ class WorkHoursViewModel(
         minutes: Int,
         onResult: (ClockOutResult) -> Unit = {}
     ) {
-        if (!clockFlight.compareAndSet(false, true)) return
+        if (!clockFlight.compareAndSet(false, true)) {
+            onResult(ClockOutResult.BUSY)
+            return
+        }
         _clockOpInProgress.value = true
         viewModelScope.launch {
             try {
@@ -283,7 +294,10 @@ class WorkHoursViewModel(
         date: LocalDate = LocalDate.now(),
         onResult: (ClockInResult) -> Unit = {}
     ) {
-        if (!clockFlight.compareAndSet(false, true)) return
+        if (!clockFlight.compareAndSet(false, true)) {
+            onResult(ClockInResult.BUSY)
+            return
+        }
         _clockOpInProgress.value = true
         val now = LocalTime.now()
         val minutes = now.hour * 60 + now.minute

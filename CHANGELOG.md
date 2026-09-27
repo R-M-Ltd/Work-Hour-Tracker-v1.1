@@ -3,6 +3,23 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## [1.3.27] — versionCode 29
+
+Fixes from the 1.3.26 analysis (High/Medium/Low); no drive-by features:
+
+- **H1 Home TimePicker IN:** Gate overnight/orphan like Clock-in-now (`HomeOpenPunch.SHOW_OVERNIGHT`); mutate `homeInMinutes` only on `STARTED` / successful update; toast on non-success.
+- **H2 clockFlight:** Invoke failure callback on flight reject (`ClockInResult.BUSY` / `ClockOutResult.BUSY` / `onDone(false)`); disable Home time pickers while `clockOpInProgress`.
+- **M3 ZeroTimeNote merge:** Dedupe only on full formatted line (never bare reason substring).
+- **M4/M5 LOCAL_ONLY + OUT midnight:** Stash reason in Compose `homeCommentsDraft` until Save (no immediate `updateEntryComments`).
+- **M6 needsZeroHoursReason:** Wired in Entry `trySave` and Home manual save with same dialog pattern as midnight.
+- **M7 Atomic punch + comments:** `clockInNow` / `updateOpenClockIn` accept optional comments in the same mutex upsert.
+- **L8 Entry zero-dialog isError:** Match Home (`zeroReasonText.isNotEmpty() && !canConfirm`).
+- **L9 Splash/icon hygiene:** Removed unused `drawable/ic_launcher`, `ic_splash_icon_fg`, unused `ic_launcher_background` color; added Arc Clock monochrome adaptive layer. Splash purple `#5B3F9E` + Arc Clock wiring unchanged.
+- **S1 findOpenEntry:** Prefer oldest open (`ORDER BY dateEpochDay ASC`) if multi-open is ever reachable.
+- **S2/S3/S4:** Deferred — 0h History filter is product-intentional for empty archives; widget already updates all instance IDs; splash visual polish device-only.
+- Protected: Lunch CTA nav-only, EOD/CSV/PDF, locked hexes + Aqua, cloud sync off / no OAuth.
+- Version 1.3.27 / versionCode 29.
+
 ## [1.3.26] — versionCode 28
 
 Two CoS smoke fixes on 1.3.25 plus Ivan UI pack `ui-rebuild-1.3.26` + Arc Clock icon pack (Benjamin pick):

@@ -44,16 +44,26 @@ object ZeroTimeNote {
     fun formatReasonLine(fieldLabel: String, reason: String): String =
         "12:00 AM ($fieldLabel): ${reason.trim()}"
 
+    /**
+     * Merge a midnight reason line into [existing].
+     * Dedupes only on the **full formatted line** — never on a bare [reason]
+     * substring (avoids skipping append when "early" already appears in a note).
+     */
     fun mergeReasonIntoNote(existing: String, fieldLabel: String, reason: String): String {
         val line = formatReasonLine(fieldLabel, reason)
         if (reason.trim().isEmpty()) return existing
         val e = existing.trim()
         if (e.isEmpty()) return line
-        if (e.contains(line) || e.contains(reason.trim())) return e
+        if (e.contains(line)) return e
         return "$e\n$line"
     }
 
-    /** Legacy overload used when field label is already baked into [reason]. */
+    /**
+     * Legacy overload used when field label is already baked into [reason]
+     * (full line or free-text). Dedupes only when the trimmed [reason] appears
+     * as a full line match / exact containment of that whole string — callers
+     * should pass the formatted line, not a short substring.
+     */
     fun mergeReasonIntoNote(existing: String, reason: String): String {
         val r = reason.trim()
         if (r.isEmpty()) return existing
@@ -74,6 +84,20 @@ object ZeroTimeNote {
             return true
         }
         return note.trim().isNotEmpty()
+    }
+
+
+    /** Pack append format for the secondary 0-hours save gate. */
+    fun formatZeroHoursLine(reason: String): String =
+        "0 hours: ${reason.trim()}"
+
+    fun mergeZeroHoursIntoNote(existing: String, reason: String): String {
+        val line = formatZeroHoursLine(reason)
+        if (reason.trim().isEmpty()) return existing
+        val e = existing.trim()
+        if (e.isEmpty()) return line
+        if (e.contains(line)) return e
+        return "$e\n$line"
     }
 
     /** Secondary gate: Save would store 0.00h with both clocks set and unequal. */

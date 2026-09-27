@@ -32,4 +32,44 @@ class HomeOpenPunchTest {
             HomeOpenPunch.decide(null, null, 8.0)
         )
     }
+
+    @Test
+    fun decide_overnightPending_empty_showsOvernight() {
+        assertEquals(
+            HomeOpenPunch.Action.SHOW_OVERNIGHT,
+            HomeOpenPunch.decide(
+                todayIn = null,
+                todayOut = null,
+                todayHoursWorked = 0.0,
+                overnightOrOrphanPending = true
+            )
+        )
+    }
+
+    @Test
+    fun decide_overnightPending_stillOpen_allowsUpdate() {
+        // Today already open: picker may update today's in even if UI somehow flagged overnight.
+        assertEquals(
+            HomeOpenPunch.Action.UPDATE_OPEN,
+            HomeOpenPunch.decide(
+                todayIn = 9 * 60,
+                todayOut = null,
+                todayHoursWorked = 0.0,
+                overnightOrOrphanPending = true
+            )
+        )
+    }
+
+    @Test
+    fun decide_overnightPending_closed_localOnly() {
+        assertEquals(
+            HomeOpenPunch.Action.LOCAL_ONLY,
+            HomeOpenPunch.decide(
+                todayIn = 9 * 60,
+                todayOut = 17 * 60,
+                todayHoursWorked = 8.0,
+                overnightOrOrphanPending = true
+            )
+        )
+    }
 }

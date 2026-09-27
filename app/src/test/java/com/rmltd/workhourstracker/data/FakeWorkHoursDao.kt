@@ -52,12 +52,12 @@ class FakeWorkHoursDao : WorkHoursDao {
     override suspend fun findOpenEntry(): DailyEntry? =
         entries.values
             .filter { it.clockInMinutes != null && it.clockOutMinutes == null }
-            .maxByOrNull { it.dateEpochDay }
+            .minByOrNull { it.dateEpochDay }
 
     override fun observeOpenEntry(): Flow<DailyEntry?> =
         entriesFlow.map { list ->
             list.filter { it.clockInMinutes != null && it.clockOutMinutes == null }
-                .maxByOrNull { it.dateEpochDay }
+                .minByOrNull { it.dateEpochDay }
         }
 
     override suspend fun insertWeekLog(weekLog: WeekLog): Long {

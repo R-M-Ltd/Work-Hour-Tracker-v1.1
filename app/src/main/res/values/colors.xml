@@ -9,5 +9,4 @@
     <color name="launch_background">#F7F2FA</color>
     <!-- 1.3.26 SplashScreen + cold-start brand (Arc Clock). -->
     <color name="splash_background">#5B3F9E</color>
-    <color name="ic_launcher_background">#5B3F9E</color>
 </resources>

@@ -16,7 +16,9 @@ enum class ClockInResult {
     STARTED,
     ALREADY_OPEN,
     ALREADY_CLOSED,
-    BLOCKED_OVERNIGHT
+    BLOCKED_OVERNIGHT,
+    /** ViewModel clockFlight rejected — overlapping op still in progress. */
+    BUSY
 }
 
 /** Outcome of one-tap Home clock-out (may finish yesterday overnight). */
@@ -24,7 +26,9 @@ enum class ClockOutResult {
     SUCCESS,
     SUCCESS_OVERNIGHT,
     FAILED,
-    ALREADY_CLOSED
+    ALREADY_CLOSED,
+    /** ViewModel clockFlight rejected — overlapping op still in progress. */
+    BUSY
 }
 
 /** Outcome of Entry save when an open overnight exists on another day. */
@@ -253,12 +257,17 @@ class WorkHoursRepository(
      */
     suspend fun clockInNow(
         date: LocalDate,
-        minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
+        minutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute,
+        comments: String? = null
     ): ClockInResult = clockMutex.withLock {
-        clockInNowUnlocked(date, minutes)
+        clockInNowUnlocked(date, minutes, comments)
     }
 
-    private suspend fun clockInNowUnlocked(date: LocalDate, minutes: Int): ClockInResult {
+    private suspend fun clockInNowUnlocked(
+        date: LocalDate,
+        minutes: Int,
+        comments: String? = null
+    ): ClockInResult {
         val existing = dao.entryForDateOnce(date.toEpochDay())
         val prior = dao.entryForDateOnce(date.minusDays(1).toEpochDay())
         val open = dao.findOpenEntry()
@@ -280,7 +289,7 @@ class WorkHoursRepository(
             DailyEntry(
                 dateEpochDay = date.toEpochDay(),
                 hoursWorked = 0.0,
-                comments = existing?.comments.orEmpty(),
+                comments = comments ?: existing?.comments.orEmpty(),
                 weekStartEpochDay = weekStart.toEpochDay(),
                 clockInMinutes = minutes,
                 clockOutMinutes = null,
@@ -295,9 +304,15 @@ class WorkHoursRepository(
 
     /**
      * Update clock-in minutes on an already-open row for [date].
-     * No-op (false) when the day is not open. Preserves comments / lunch / break.
+     * No-op (false) when the day is not open. Preserves lunch / break; when
+     * [comments] is non-null, writes minutes + comments in the same upsert
+     * (atomic with [clockMutex]).
      */
-    suspend fun updateOpenClockIn(date: LocalDate, minutes: Int): Boolean = clockMutex.withLock {
+    suspend fun updateOpenClockIn(
+        date: LocalDate,
+        minutes: Int,
+        comments: String? = null
+    ): Boolean = clockMutex.withLock {
         val existing = dao.entryForDateOnce(date.toEpochDay()) ?: return@withLock false
         if (existing.clockInMinutes == null || existing.clockOutMinutes != null) return@withLock false
         dao.upsertEntry(
@@ -305,6 +320,7 @@ class WorkHoursRepository(
                 clockInMinutes = minutes,
                 hoursWorked = 0.0,
                 clockOutMinutes = null,
+                comments = comments ?: existing.comments,
                 updatedAtEpochMillis = System.currentTimeMillis()
             )
         )
@@ -341,7 +357,7 @@ class WorkHoursRepository(
             orphanOpenOnOtherDay = orphanOpen
         )
         when (decision) {
-            ClockOutResult.ALREADY_CLOSED, ClockOutResult.FAILED -> return@withLock decision
+            ClockOutResult.ALREADY_CLOSED, ClockOutResult.FAILED, ClockOutResult.BUSY -> return@withLock decision
             ClockOutResult.SUCCESS -> {
                 // todayIn non-null by decideClockOut contract
                 upsertClosedEntry(

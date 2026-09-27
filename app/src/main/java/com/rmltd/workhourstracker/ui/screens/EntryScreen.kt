@@ -72,6 +72,8 @@ fun EntryScreen(
     var pendingZeroField by remember { mutableStateOf<ClockField?>(null) }
     var pendingZeroMinutes by remember { mutableStateOf<Int?>(null) }
     var zeroReasonText by remember { mutableStateOf("") }
+    var showZeroHoursDialog by remember { mutableStateOf(false) }
+    var zeroHoursReasonText by remember { mutableStateOf("") }
 
     LaunchedEffect(date) {
         entryLoadDone = false
@@ -210,6 +212,9 @@ fun EntryScreen(
                 "Add a reason note for 12:00 AM (0) before saving",
                 Toast.LENGTH_SHORT
             ).show()
+        } else if (ZeroTimeNote.needsZeroHoursReason(start, end, worked?.hours)) {
+            zeroHoursReasonText = ""
+            showZeroHoursDialog = true
         } else if (HoursCalc.isOvernight(start, end)) {
             showOvernightConfirm = true
         } else {
@@ -590,7 +595,7 @@ fun EntryScreen(
                                 else "${zeroReasonText.length}/500"
                             )
                         },
-                        isError = !canConfirm,
+                        isError = zeroReasonText.isNotEmpty() && !canConfirm,
                         modifier = Modifier
                             .fillMaxWidth()
                             .semantics { contentDescription = ZeroTimeNote.DIALOG_LABEL }
@@ -619,6 +624,71 @@ fun EntryScreen(
                         pendingZeroField = null
                         pendingZeroMinutes = null
                         zeroReasonText = ""
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = ZeroTimeNote.DISMISS_LABEL
+                    }
+                ) { Text(ZeroTimeNote.DISMISS_LABEL) }
+            }
+        )
+    }
+
+    if (showZeroHoursDialog) {
+        val canConfirm = zeroHoursReasonText.trim().isNotEmpty()
+        AlertDialog(
+            onDismissRequest = {
+                showZeroHoursDialog = false
+                zeroHoursReasonText = ""
+            },
+            title = { Text(ZeroTimeNote.ZERO_HOURS_TITLE) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(ZeroTimeNote.ZERO_HOURS_BODY)
+                    OutlinedTextField(
+                        value = zeroHoursReasonText,
+                        onValueChange = { if (it.length <= 500) zeroHoursReasonText = it },
+                        label = { Text(ZeroTimeNote.DIALOG_LABEL) },
+                        placeholder = { Text(ZeroTimeNote.DIALOG_PLACEHOLDER) },
+                        supportingText = {
+                            Text(
+                                if (!canConfirm) ZeroTimeNote.EMPTY_ERROR
+                                else "${zeroHoursReasonText.length}/500"
+                            )
+                        },
+                        isError = zeroHoursReasonText.isNotEmpty() && !canConfirm,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = ZeroTimeNote.DIALOG_LABEL }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val reason = zeroHoursReasonText.trim()
+                        if (reason.isEmpty()) return@TextButton
+                        comments = ZeroTimeNote.mergeZeroHoursIntoNote(comments, reason)
+                        showZeroHoursDialog = false
+                        zeroHoursReasonText = ""
+                        val start = clockInMinutes
+                        val end = clockOutMinutes
+                        if (start != null && end != null && HoursCalc.isOvernight(start, end)) {
+                            showOvernightConfirm = true
+                        } else {
+                            performSave()
+                        }
+                    },
+                    enabled = canConfirm,
+                    modifier = Modifier.semantics {
+                        contentDescription = ZeroTimeNote.CONFIRM_LABEL
+                    }
+                ) { Text(ZeroTimeNote.CONFIRM_LABEL) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showZeroHoursDialog = false
+                        zeroHoursReasonText = ""
                     },
                     modifier = Modifier.semantics {
                         contentDescription = ZeroTimeNote.DISMISS_LABEL

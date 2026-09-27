@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Arc Clock monochrome for adaptive themed icons (API 33+). Simplified from pack monochrome.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer ring -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M54,24c-16.57,0 -30,13.43 -30,30s13.43,30 30,30 30,-13.43 30,-30 -13.43,-30 -30,-30zM54,78c-13.23,0 -24,-10.77 -24,-24s10.77,-24 24,-24 24,10.77 24,24 -10.77,24 -24,24z"/>
+    <!-- Hand (filled wedge toward 4:30) -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M54,54 L52,52 L65,74 L68,72 Z"/>
+    <!-- Hub -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M54,49.8c-2.32,0 -4.2,1.88 -4.2,4.2s1.88,4.2 4.2,4.2 4.2,-1.88 4.2,-4.2 -1.88,-4.2 -4.2,-4.2z"/>
+</vector>

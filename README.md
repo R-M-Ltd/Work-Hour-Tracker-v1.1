@@ -40,7 +40,7 @@ See [CHANGELOG.md](CHANGELOG.md) for shipped 1.3.x notes.
    WorkManager (all standard, no extra accounts or keys needed).
 4. Run on an emulator or device with **API 26 (Android 8.0)** or higher.
 
-Launcher icon is `@drawable/ic_launcher` (vector).
+Launcher icon is adaptive `@mipmap/ic_launcher` (Arc Clock) with monochrome layer.
 
 ## Unit tests
 Pure Kotlin / JUnit tests under `app/src/test/java/.../` cover:

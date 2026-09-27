@@ -65,7 +65,7 @@ class EndOfDayActionReceiver : BroadcastReceiver() {
                                 ReminderScheduler.scheduleEndOfDayReminder(context)
                                 toast(context, "Already clocked out")
                             }
-                            ClockOutResult.FAILED -> {
+                            ClockOutResult.FAILED, ClockOutResult.BUSY -> {
                                 notifyClockOutFailed(
                                     context,
                                     "Could not clock out — open the app to finish"

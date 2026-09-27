@@ -68,4 +68,59 @@ class WorkHoursRepositoryClockInPersistTest {
         assertEquals("pre-note", loaded.comments)
         assertEquals(nineAm, loaded.clockInMinutes)
     }
+
+    @Test
+    fun clockInNow_atomicComments_writtenWithOpenPunch() = runBlocking {
+        val (dao, repo) = newRepo()
+        val note = "12:00 AM (Clock in): Overnight start"
+        assertEquals(
+            ClockInResult.STARTED,
+            repo.clockInNow(today, 0, comments = note)
+        )
+        val loaded = repo.entryForDateOnce(today)!!
+        assertEquals(0, loaded.clockInMinutes)
+        assertEquals(note, loaded.comments)
+        assertNull(loaded.clockOutMinutes)
+    }
+
+    @Test
+    fun updateOpenClockIn_atomicComments_sameUpsert() = runBlocking {
+        val (_, repo) = newRepo()
+        assertEquals(ClockInResult.STARTED, repo.clockInNow(today, nineAm))
+        val note = "12:00 AM (Clock in): Moved to midnight"
+        assertTrue(repo.updateOpenClockIn(today, 0, comments = note))
+        val loaded = repo.entryForDateOnce(today)!!
+        assertEquals(0, loaded.clockInMinutes)
+        assertEquals(note, loaded.comments)
+    }
+
+    @Test
+    fun findOpenEntry_picksOldestWhenMultipleOpen() = runBlocking {
+        val (dao, repo) = newRepo()
+        val older = today.minusDays(3)
+        val newer = today.minusDays(1)
+        dao.upsertEntry(
+            DailyEntry(
+                dateEpochDay = older.toEpochDay(),
+                hoursWorked = 0.0,
+                comments = "",
+                weekStartEpochDay = older.toEpochDay(),
+                clockInMinutes = nineAm,
+                clockOutMinutes = null
+            )
+        )
+        dao.upsertEntry(
+            DailyEntry(
+                dateEpochDay = newer.toEpochDay(),
+                hoursWorked = 0.0,
+                comments = "",
+                weekStartEpochDay = newer.toEpochDay(),
+                clockInMinutes = tenAm,
+                clockOutMinutes = null
+            )
+        )
+        val open = repo.findOpenEntryOnce()
+        assertNotNull(open)
+        assertEquals(older.toEpochDay(), open!!.dateEpochDay)
+    }
 }
