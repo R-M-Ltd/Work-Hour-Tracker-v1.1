@@ -3,6 +3,16 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## 1.3.34 (versionCode 36)
+
+- **Home declutter:** week title + total + single ⋮; one stateful Clock in/out; Change/Add under today’s total; History/Settings/Forgot/Lunch/Set times via ⋮; bottom History removed.
+- **Typed hours + Add/Change sheet:** decimal hours (incl. 0); typed wins on Save; `hoursSource` CLOCK|TYPED; Reason for 0 hours? for typed 0; equal in/out alternate path kept.
+- **No lunch taken:** checkbox on Entry + sheet; skips break subtract; History muted “No lunch” chip; CSV/PDF unchanged (no new column).
+- **Arc Clock re-image:** launcher/splash/mono with subtle timesheet bar ticks; splash still `#5B3F9E`.
+- **Cloud sync:** Drive + Dropbox + OneDrive picker (off by default); EncryptedSharedPreferences tokens; LWW sync engine; iCloud footnote; Sign in needs `local.properties` client IDs.
+- **History:** light padding/rhythm polish only; export/search/notes/filters/Add missed day unmoved.
+- **Settings → Today:** Set today’s times + Log lunch/break shortcuts.
+
 ## [1.3.32] — versionCode 34
 
 Arthur QA D4 from 1.3.31 + Ivan UI pack `ui-rebuild-1.3.32` (baseline `755f3e9`):

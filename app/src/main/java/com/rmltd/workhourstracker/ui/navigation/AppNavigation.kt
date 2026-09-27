@@ -70,7 +70,17 @@ fun AppNavHost(
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 viewModel = viewModel,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onSetTodaysTimes = {
+                    navController.navigate(Routes.entry(LocalDate.now())) {
+                        popUpTo(Routes.HOME)
+                    }
+                },
+                onLogLunch = {
+                    navController.navigate(Routes.entry(LocalDate.now())) {
+                        popUpTo(Routes.HOME)
+                    }
+                }
             )
         }
     }

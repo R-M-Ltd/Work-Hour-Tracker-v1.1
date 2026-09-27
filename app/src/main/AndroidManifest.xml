@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Cloud sync HTTPS -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Voice-to-text entry -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Daily reminder notifications (Android 13+) -->
@@ -37,6 +41,15 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Cloud OAuth redirect: com.rmltd.workhourstracker://oauth -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="com.rmltd.workhourstracker"
+                    android:host="oauth" />
             </intent-filter>
         </activity>
 

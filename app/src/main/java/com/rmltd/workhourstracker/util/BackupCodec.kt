@@ -176,6 +176,8 @@ object BackupCodec {
         putNullableInt(o, "lunchInMinutes", e.lunchInMinutes)
         putNullableInt(o, "breakDurationMinutes", e.breakDurationMinutes)
         o.put("breakPaid", e.breakPaid)
+        o.put("hoursSource", e.hoursSource)
+        o.put("noLunchTaken", e.noLunchTaken)
         return o
     }
 
@@ -195,7 +197,9 @@ object BackupCodec {
             lunchOutMinutes = nullableInt(o, "lunchOutMinutes"),
             lunchInMinutes = nullableInt(o, "lunchInMinutes"),
             breakDurationMinutes = nullableInt(o, "breakDurationMinutes"),
-            breakPaid = o.optBoolean("breakPaid", false)
+            breakPaid = o.optBoolean("breakPaid", false),
+            hoursSource = o.optString("hoursSource", "CLOCK").ifBlank { "CLOCK" },
+            noLunchTaken = o.optBoolean("noLunchTaken", false)
         )
     }
 

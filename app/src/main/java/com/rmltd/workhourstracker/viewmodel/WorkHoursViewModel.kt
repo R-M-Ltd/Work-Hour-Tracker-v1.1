@@ -116,13 +116,15 @@ class WorkHoursViewModel(
      */
     fun saveEntry(
         date: LocalDate,
-        clockInMinutes: Int,
-        clockOutMinutes: Int,
+        clockInMinutes: Int?,
+        clockOutMinutes: Int?,
         comments: String,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
         breakDurationMinutes: Int? = null,
         breakPaid: Boolean = false,
+        typedHours: Double? = null,
+        noLunchTaken: Boolean = false,
         onResult: (SaveEntryResult) -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -137,7 +139,9 @@ class WorkHoursViewModel(
                         lunchOutMinutes,
                         lunchInMinutes,
                         breakDurationMinutes = breakDurationMinutes,
-                        breakPaid = breakPaid
+                        breakPaid = breakPaid,
+                        typedHours = typedHours,
+                        noLunchTaken = noLunchTaken
                     )
                     onResult(result)
                 } finally {
@@ -150,13 +154,15 @@ class WorkHoursViewModel(
 
     fun discardOpenAndSaveEntry(
         date: LocalDate,
-        clockInMinutes: Int,
-        clockOutMinutes: Int,
+        clockInMinutes: Int?,
+        clockOutMinutes: Int?,
         comments: String,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
         breakDurationMinutes: Int? = null,
         breakPaid: Boolean = false,
+        typedHours: Double? = null,
+        noLunchTaken: Boolean = false,
         onDone: () -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -171,7 +177,9 @@ class WorkHoursViewModel(
                         lunchOutMinutes,
                         lunchInMinutes,
                         breakDurationMinutes = breakDurationMinutes,
-                        breakPaid = breakPaid
+                        breakPaid = breakPaid,
+                        typedHours = typedHours,
+                        noLunchTaken = noLunchTaken
                     )
                     onDone()
                 } finally {
@@ -331,6 +339,16 @@ class WorkHoursViewModel(
             val ok = repository.updateEntryComments(date, comments)
             onDone(ok)
         }
+    }
+
+
+    /** Cloud sync: replace/merge a single day from remote (LWW already decided by engine). */
+    suspend fun upsertEntryFromSync(entry: DailyEntry) {
+        repository.upsertEntryFromSync(entry)
+    }
+
+    suspend fun deleteEntryFromSync(dateEpochDay: Long) {
+        repository.deleteEntryFromSync(dateEpochDay)
     }
 
     suspend fun loadAllEntries(): List<DailyEntry> = repository.allEntriesOnce()

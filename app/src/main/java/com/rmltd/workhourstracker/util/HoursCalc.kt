@@ -8,7 +8,8 @@ import kotlin.math.min
 import kotlin.math.round
 
 /**
- * Clock math. Hours are never typed; they are derived from clock times.
+ * Clock math. When clocks are used, hours are derived from clock times.
+ * Typed hours bypass this (see HoursSource.TYPED / repository typed save).
  *
  * Minutes are minutes-from-midnight (0..1439).
  * Times that fall before clock-in are treated as after midnight (overnight).
@@ -45,7 +46,8 @@ object HoursCalc {
         lunchInMinutes: Int? = null,
         equalOutMeansFullDay: Boolean = false,
         breakDurationMinutes: Int? = null,
-        breakPaid: Boolean = false
+        breakPaid: Boolean = false,
+        noLunchTaken: Boolean = false
     ): Double = worked(
         clockInMinutes,
         clockOutMinutes,
@@ -53,7 +55,8 @@ object HoursCalc {
         lunchInMinutes,
         equalOutMeansFullDay,
         breakDurationMinutes,
-        breakPaid
+        breakPaid,
+        noLunchTaken
     ).hours
 
     fun worked(
@@ -63,7 +66,8 @@ object HoursCalc {
         lunchInMinutes: Int? = null,
         equalOutMeansFullDay: Boolean = false,
         breakDurationMinutes: Int? = null,
-        breakPaid: Boolean = false
+        breakPaid: Boolean = false,
+        noLunchTaken: Boolean = false
     ): Worked {
         requireValid(clockInMinutes)
         requireValid(clockOutMinutes)
@@ -71,14 +75,18 @@ object HoursCalc {
         val outOnTimeline = expand(clockOutMinutes, clockInMinutes, equalOutMeansFullDay)
         val gross = outOnTimeline - clockInMinutes
 
-        val lunch = usableLunch(clockInMinutes, outOnTimeline, lunchOutMinutes, lunchInMinutes)
+        // Explicit no-lunch: skip break/lunch subtract entirely.
+        val effectiveLunchOut = if (noLunchTaken) null else lunchOutMinutes
+        val effectiveLunchIn = if (noLunchTaken) null else lunchInMinutes
+        val effectiveBreak = if (noLunchTaken) null else breakDurationMinutes
+        val lunch = usableLunch(clockInMinutes, outOnTimeline, effectiveLunchOut, effectiveLunchIn)
         val (net, lunchApplied, breakApplied) = when {
             lunch != null -> {
                 val n = (lunch.first - clockInMinutes) + (outOnTimeline - lunch.second)
                 Triple(n, true, false)
             }
-            shouldApplyBreakDuration(breakDurationMinutes, breakPaid) -> {
-                val breakMins = breakDurationMinutes!!.coerceAtLeast(0)
+            shouldApplyBreakDuration(effectiveBreak, breakPaid) -> {
+                val breakMins = effectiveBreak!!.coerceAtLeast(0)
                 Triple(max(0, gross - min(breakMins, gross)), false, true)
             }
             else -> Triple(gross, false, false)

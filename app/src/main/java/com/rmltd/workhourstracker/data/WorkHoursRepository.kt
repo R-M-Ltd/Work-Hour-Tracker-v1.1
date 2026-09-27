@@ -115,15 +115,17 @@ class WorkHoursRepository(
      */
     suspend fun saveEntry(
         date: LocalDate,
-        clockInMinutes: Int,
-        clockOutMinutes: Int,
+        clockInMinutes: Int?,
+        clockOutMinutes: Int?,
         comments: String,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
         forceAfterDiscard: Boolean = false,
         equalOutMeansFullDay: Boolean = false,
         breakDurationMinutes: Int? = null,
-        breakPaid: Boolean = false
+        breakPaid: Boolean = false,
+        typedHours: Double? = null,
+        noLunchTaken: Boolean = false
     ): SaveEntryResult = clockMutex.withLock {
         if (!forceAfterDiscard) {
             val open = dao.findOpenEntry()
@@ -142,7 +144,9 @@ class WorkHoursRepository(
             lunchInMinutes,
             equalOutMeansFullDay,
             breakDurationMinutes,
-            breakPaid
+            breakPaid,
+            typedHours = typedHours,
+            noLunchTaken = noLunchTaken
         )
         refreshWeekArchiveIfPresent(date)
         SaveEntryResult.Saved
@@ -151,30 +155,53 @@ class WorkHoursRepository(
     /** Unchecked write used by clock-out paths (already inside mutex / state checks). */
     private suspend fun upsertClosedEntry(
         date: LocalDate,
-        clockInMinutes: Int,
-        clockOutMinutes: Int,
+        clockInMinutes: Int?,
+        clockOutMinutes: Int?,
         comments: String,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
         equalOutMeansFullDay: Boolean = false,
         breakDurationMinutes: Int? = null,
-        breakPaid: Boolean = false
+        breakPaid: Boolean = false,
+        typedHours: Double? = null,
+        noLunchTaken: Boolean = false
     ) {
         val weekStart = WeekUtils.weekStartFor(date, startDay())
-        val lunchOut = if (lunchOutMinutes != null && lunchInMinutes != null) lunchOutMinutes else null
-        val lunchIn = if (lunchOutMinutes != null && lunchInMinutes != null) lunchInMinutes else null
+        val lunchOut = if (noLunchTaken) null
+            else if (lunchOutMinutes != null && lunchInMinutes != null) lunchOutMinutes
+            else null
+        val lunchIn = if (noLunchTaken) null
+            else if (lunchOutMinutes != null && lunchInMinutes != null) lunchInMinutes
+            else null
         // Timed break wins; otherwise persist duration (unpaid by default).
-        val duration = if (lunchOut != null) null else breakDurationMinutes?.takeIf { it > 0 }
+        val duration = when {
+            noLunchTaken -> null
+            lunchOut != null -> null
+            else -> breakDurationMinutes?.takeIf { it > 0 }
+        }
         val paid = if (duration != null) breakPaid else false
-        val hours = HoursCalc.hoursWorked(
-            clockInMinutes,
-            clockOutMinutes,
-            lunchOut,
-            lunchIn,
-            equalOutMeansFullDay = equalOutMeansFullDay,
-            breakDurationMinutes = duration,
-            breakPaid = paid
-        )
+        val source: HoursSource
+        val hours: Double
+        if (typedHours != null) {
+            // Typed wins on Save — keep clocks as entered; do not overwrite typed from clocks.
+            source = HoursSource.TYPED
+            hours = typedHours
+        } else {
+            require(clockInMinutes != null && clockOutMinutes != null) {
+                "clock save requires both clocks when typedHours is null"
+            }
+            source = HoursSource.CLOCK
+            hours = HoursCalc.hoursWorked(
+                clockInMinutes,
+                clockOutMinutes,
+                lunchOut,
+                lunchIn,
+                equalOutMeansFullDay = equalOutMeansFullDay,
+                breakDurationMinutes = duration,
+                breakPaid = paid,
+                noLunchTaken = noLunchTaken
+            )
+        }
         dao.upsertEntry(
             DailyEntry(
                 dateEpochDay = date.toEpochDay(),
@@ -186,7 +213,9 @@ class WorkHoursRepository(
                 lunchOutMinutes = lunchOut,
                 lunchInMinutes = lunchIn,
                 breakDurationMinutes = duration,
-                breakPaid = paid
+                breakPaid = paid,
+                hoursSource = source.name,
+                noLunchTaken = noLunchTaken
             )
         )
         // D1: any successful closed-day persist clears Home draft for that epoch
@@ -237,13 +266,15 @@ class WorkHoursRepository(
      */
     suspend fun discardOpenAndSaveEntry(
         date: LocalDate,
-        clockInMinutes: Int,
-        clockOutMinutes: Int,
+        clockInMinutes: Int?,
+        clockOutMinutes: Int?,
         comments: String,
         lunchOutMinutes: Int? = null,
         lunchInMinutes: Int? = null,
         breakDurationMinutes: Int? = null,
-        breakPaid: Boolean = false
+        breakPaid: Boolean = false,
+        typedHours: Double? = null,
+        noLunchTaken: Boolean = false
     ): SaveEntryResult = clockMutex.withLock {
         val open = dao.findOpenEntry()
         if (open != null && open.dateEpochDay != date.toEpochDay()) {
@@ -257,7 +288,9 @@ class WorkHoursRepository(
             lunchOutMinutes,
             lunchInMinutes,
             breakDurationMinutes = breakDurationMinutes,
-            breakPaid = breakPaid
+            breakPaid = breakPaid,
+            typedHours = typedHours,
+            noLunchTaken = noLunchTaken
         )
         refreshWeekArchiveIfPresent(date)
         SaveEntryResult.Saved
@@ -309,7 +342,12 @@ class WorkHoursRepository(
                 lunchOutMinutes = existing?.lunchOutMinutes,
                 lunchInMinutes = existing?.lunchInMinutes,
                 breakDurationMinutes = existing?.breakDurationMinutes,
-                breakPaid = existing?.breakPaid ?: false
+                breakPaid = existing?.breakPaid ?: false,
+                // Live punch: primary is punch; do not clear prior typed until Change Save.
+                // Open row still stores CLOCK hours 0 until close; typed hours live in sheet only
+                // until saved — when reopening a typed closed day after discard, preserve flags.
+                hoursSource = HoursSource.CLOCK.name,
+                noLunchTaken = existing?.noLunchTaken ?: false
             )
         )
         return ClockInResult.STARTED
@@ -381,7 +419,8 @@ class WorkHoursRepository(
                     lunchOutMinutes = today.lunchOutMinutes,
                     lunchInMinutes = today.lunchInMinutes,
                     breakDurationMinutes = today.breakDurationMinutes,
-                    breakPaid = today.breakPaid
+                    breakPaid = today.breakPaid,
+                    noLunchTaken = today.noLunchTaken
                 )
                 refreshWeekArchiveIfPresent(date)
                 // D7: same silent drain as overnight — leftover non-today opens
@@ -407,7 +446,8 @@ class WorkHoursRepository(
                     lunchInMinutes = target.lunchInMinutes,
                     equalOutMeansFullDay = targetIn == minutes,
                     breakDurationMinutes = target.breakDurationMinutes,
-                    breakPaid = target.breakPaid
+                    breakPaid = target.breakPaid,
+                    noLunchTaken = target.noLunchTaken
                 )
                 refreshWeekArchiveIfPresent(targetDate)
                 // S-C / D7: corrupt multi-open — drain remaining non-today opens
@@ -439,7 +479,8 @@ class WorkHoursRepository(
                 lunchInMinutes = leftover.lunchInMinutes,
                 equalOutMeansFullDay = leftoverIn == outMinutes,
                 breakDurationMinutes = leftover.breakDurationMinutes,
-                breakPaid = leftover.breakPaid
+                breakPaid = leftover.breakPaid,
+                noLunchTaken = leftover.noLunchTaken
             )
             refreshWeekArchiveIfPresent(leftoverDate)
         }
@@ -547,6 +588,18 @@ class WorkHoursRepository(
 
 
     /** Update only the note/comments on an existing day; no-op if row missing. */
+    /** Cloud sync apply — caller already performed LWW; bumps archive if needed. */
+    suspend fun upsertEntryFromSync(entry: DailyEntry) = clockMutex.withLock {
+        dao.upsertEntry(entry)
+        refreshWeekArchiveIfPresent(java.time.LocalDate.ofEpochDay(entry.dateEpochDay))
+        onDayFullySaved(java.time.LocalDate.ofEpochDay(entry.dateEpochDay))
+    }
+
+    suspend fun deleteEntryFromSync(dateEpochDay: Long) = clockMutex.withLock {
+        dao.deleteEntry(dateEpochDay)
+        refreshWeekArchiveIfPresent(java.time.LocalDate.ofEpochDay(dateEpochDay))
+    }
+
     suspend fun updateEntryComments(date: LocalDate, comments: String): Boolean = clockMutex.withLock {
         val existing = dao.entryForDateOnce(date.toEpochDay()) ?: return@withLock false
         dao.upsertEntry(

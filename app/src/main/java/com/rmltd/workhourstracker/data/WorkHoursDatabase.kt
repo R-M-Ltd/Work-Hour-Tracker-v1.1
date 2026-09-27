@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [DailyEntry::class, WeekLog::class], version = 4, exportSchema = false)
+@Database(entities = [DailyEntry::class, WeekLog::class], version = 5, exportSchema = false)
 abstract class WorkHoursDatabase : RoomDatabase() {
 
     abstract fun workHoursDao(): WorkHoursDao
@@ -39,13 +39,30 @@ abstract class WorkHoursDatabase : RoomDatabase() {
             }
         }
 
+        /** 1.3.34: hoursSource (CLOCK|TYPED) + noLunchTaken. Existing rows → CLOCK / false. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE daily_entries ADD COLUMN hoursSource TEXT NOT NULL DEFAULT 'CLOCK'"
+                )
+                db.execSQL(
+                    "ALTER TABLE daily_entries ADD COLUMN noLunchTaken INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         fun getInstance(context: Context): WorkHoursDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     WorkHoursDatabase::class.java,
                     "work_hours.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { INSTANCE = it }
+                ).addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5
+                ).build().also { INSTANCE = it }
             }
     }
 }

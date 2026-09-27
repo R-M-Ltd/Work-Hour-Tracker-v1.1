@@ -4,6 +4,24 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
+ * How [DailyEntry.hoursWorked] was set.
+ * CLOCK = derived from clock in/out (default for existing / punch saves).
+ * TYPED = user typed hours in Add/Change sheet; typed wins on Save.
+ */
+enum class HoursSource {
+    CLOCK,
+    TYPED;
+
+    companion object {
+        fun fromStorage(raw: String?): HoursSource =
+            when (raw?.uppercase()) {
+                "TYPED" -> TYPED
+                else -> CLOCK
+            }
+    }
+}
+
+/**
  * One row per calendar day. [dateEpochDay] (LocalDate.toEpochDay()) is the primary
  * key, so saving an entry for a day that already has one simply overwrites it.
  *
@@ -18,12 +36,12 @@ import androidx.room.PrimaryKey
 data class DailyEntry(
     @PrimaryKey
     val dateEpochDay: Long,
-    /** Derived from clock-in / clock-out. Never accept this from the UI. */
+    /** Stored hours — clock-derived or typed (see [hoursSource]). */
     val hoursWorked: Double,
     val comments: String = "",
     val weekStartEpochDay: Long,
     val updatedAtEpochMillis: Long = System.currentTimeMillis(),
-    /** Minutes from midnight, 0..1439. Null on pre-1.1 rows. */
+    /** Minutes from midnight, 0..1439. Null on pre-1.1 rows / typed-only days. */
     val clockInMinutes: Int? = null,
     val clockOutMinutes: Int? = null,
     /** Optional break/lunch start. Null means no timed break. */
@@ -36,5 +54,19 @@ data class DailyEntry(
      */
     val breakDurationMinutes: Int? = null,
     /** When true, [breakDurationMinutes] is not subtracted (paid break). */
-    val breakPaid: Boolean = false
-)
+    val breakPaid: Boolean = false,
+    /**
+     * CLOCK (default) or TYPED. Existing rows migrate to CLOCK.
+     * Stored as String for Room simplicity.
+     */
+    val hoursSource: String = HoursSource.CLOCK.name,
+    /** Explicit mark that no unpaid lunch/break was taken. Default false. */
+    val noLunchTaken: Boolean = false
+) {
+    fun hoursSourceEnum(): HoursSource = HoursSource.fromStorage(hoursSource)
+
+    /** True when this day has persisted hours (closed punch or typed, incl. 0.00). */
+    fun hasPersistedHours(): Boolean =
+        hoursSourceEnum() == HoursSource.TYPED ||
+            (clockOutMinutes != null && clockInMinutes != null)
+}

@@ -29,6 +29,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.SaveEntryResult
+import com.rmltd.workhourstracker.data.HoursSource
+import com.rmltd.workhourstracker.ui.components.AddChangeHoursResult
+import com.rmltd.workhourstracker.ui.components.AddChangeHoursSheet
+import com.rmltd.workhourstracker.ui.components.formatHoursField
 import com.rmltd.workhourstracker.util.EntryFormSeed
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.ZeroTimeNote
@@ -66,8 +70,13 @@ fun EntryScreen(
     var lunchInMinutes by remember(date) { mutableStateOf<Int?>(null) }
     var breakDurationMinutes by remember(date) { mutableStateOf<Int?>(null) }
     var breakPaid by remember(date) { mutableStateOf(false) }
+    var noLunchTaken by remember(date) { mutableStateOf(false) }
+    var hoursSource by remember(date) { mutableStateOf(HoursSource.CLOCK) }
+    var persistedHours by remember(date) { mutableStateOf<Double?>(null) }
     var comments by remember(date) { mutableStateOf("") }
     var entryLoadDone by remember(date) { mutableStateOf(false) }
+    var showAddChangeSheet by remember { mutableStateOf(false) }
+    var pendingTypedHours by remember { mutableStateOf<Double?>(null) }
     var pickerField by remember { mutableStateOf<ClockField?>(null) }
     var pendingZeroField by remember { mutableStateOf<ClockField?>(null) }
     var pendingZeroMinutes by remember { mutableStateOf<Int?>(null) }
@@ -98,6 +107,9 @@ fun EntryScreen(
         breakDurationMinutes = seed.breakDurationMinutes
         breakPaid = seed.breakPaid
         comments = seed.comments
+        noLunchTaken = loaded?.noLunchTaken ?: false
+        hoursSource = loaded?.hoursSourceEnum() ?: HoursSource.CLOCK
+        persistedHours = loaded?.takeIf { it.hasPersistedHours() }?.hoursWorked
         entryLoadDone = true
     }
     /** Mode for the in-flight speech request; set at launch, read in the result callback (L3). */
@@ -108,36 +120,53 @@ fun EntryScreen(
 
     val worked = remember(
         clockInMinutes, clockOutMinutes, lunchOutMinutes, lunchInMinutes,
-        breakDurationMinutes, breakPaid
+        breakDurationMinutes, breakPaid, noLunchTaken, persistedHours, hoursSource
     ) {
-        // equalOutMeansFullDay defaults false so in==out → 0.00h (manual zero day).
-        if (clockInMinutes != null && clockOutMinutes != null) {
-            HoursCalc.worked(
+        if (hoursSource == HoursSource.TYPED && persistedHours != null &&
+            (clockInMinutes == null || clockOutMinutes == null)
+        ) {
+            // Show typed hours when clocks incomplete
+            HoursCalc.Worked(persistedHours!!, false, false, false)
+        } else if (clockInMinutes != null && clockOutMinutes != null) {
+            val w = HoursCalc.worked(
                 clockInMinutes!!,
                 clockOutMinutes!!,
                 lunchOutMinutes,
                 lunchInMinutes,
                 breakDurationMinutes = breakDurationMinutes,
-                breakPaid = breakPaid
+                breakPaid = breakPaid,
+                noLunchTaken = noLunchTaken
             )
+            // Typed wins for display when set
+            if (hoursSource == HoursSource.TYPED && persistedHours != null) {
+                w.copy(hours = persistedHours!!)
+            } else w
         } else {
             null
         }
     }
 
-    fun performSave(forceDiscard: Boolean = false) {
-        val start = clockInMinutes ?: return
-        val end = clockOutMinutes ?: return
+    fun performSave(forceDiscard: Boolean = false, typedHours: Double? = null) {
+        val typed = typedHours ?: pendingTypedHours
+        // Typed-only save may omit clocks; clock save still needs both.
+        if (typed == null && (clockInMinutes == null || clockOutMinutes == null)) return
+        val start = clockInMinutes
+        val end = clockOutMinutes
+        val lunchOut = if (noLunchTaken) null else lunchOutMinutes
+        val lunchIn = if (noLunchTaken) null else lunchInMinutes
+        val breakDur = if (noLunchTaken) null else breakDurationMinutes
         if (forceDiscard) {
             viewModel.discardOpenAndSaveEntry(
                 date = date,
                 clockInMinutes = start,
                 clockOutMinutes = end,
                 comments = comments,
-                lunchOutMinutes = lunchOutMinutes,
-                lunchInMinutes = lunchInMinutes,
-                breakDurationMinutes = breakDurationMinutes,
+                lunchOutMinutes = lunchOut,
+                lunchInMinutes = lunchIn,
+                breakDurationMinutes = breakDur,
                 breakPaid = breakPaid,
+                typedHours = typed,
+                noLunchTaken = noLunchTaken,
                 onDone = onDone
             )
         } else {
@@ -146,10 +175,12 @@ fun EntryScreen(
                 clockInMinutes = start,
                 clockOutMinutes = end,
                 comments = comments,
-                lunchOutMinutes = lunchOutMinutes,
-                lunchInMinutes = lunchInMinutes,
-                breakDurationMinutes = breakDurationMinutes,
-                breakPaid = breakPaid
+                lunchOutMinutes = lunchOut,
+                lunchInMinutes = lunchIn,
+                breakDurationMinutes = breakDur,
+                breakPaid = breakPaid,
+                typedHours = typed,
+                noLunchTaken = noLunchTaken
             ) { result ->
                 when (result) {
                     is SaveEntryResult.Saved -> onDone()
@@ -193,17 +224,19 @@ fun EntryScreen(
         }
     }
 
-    fun trySave() {
+    fun trySave(typedHours: Double? = null) {
+        if (typedHours != null) pendingTypedHours = typedHours
+        val typed = pendingTypedHours
         val start = clockInMinutes
         val end = clockOutMinutes
-        if (start == null || end == null) {
-            Toast.makeText(context, "Set clock in and clock out", Toast.LENGTH_SHORT).show()
+        if (typed == null && (start == null || end == null)) {
+            Toast.makeText(context, "Set clock in and clock out, or use Add hours", Toast.LENGTH_SHORT).show()
         } else if (!ZeroTimeNote.canSaveWithNote(
                 comments,
                 clockInMinutes = start,
                 clockOutMinutes = end,
-                lunchOutMinutes = lunchOutMinutes,
-                lunchInMinutes = lunchInMinutes
+                lunchOutMinutes = if (noLunchTaken) null else lunchOutMinutes,
+                lunchInMinutes = if (noLunchTaken) null else lunchInMinutes
             )
         ) {
             Toast.makeText(
@@ -211,15 +244,33 @@ fun EntryScreen(
                 "Add a reason note for 12:00 AM (0) before saving",
                 Toast.LENGTH_SHORT
             ).show()
-        } else if (ZeroTimeNote.needsZeroHoursReason(start, end, worked?.hours)) {
-            // Equal in/out or break-eats-shift → Reason for 0 hours? (1.3.33)
+        } else if (ZeroTimeNote.needsZeroHoursReason(
+                start, end, typed ?: worked?.hours, typedHours = typed
+            )
+        ) {
             zeroHoursReasonText = ""
             showZeroHoursDialog = true
-        } else if (HoursCalc.isOvernight(start, end)) {
+        } else if (start != null && end != null && HoursCalc.isOvernight(start, end) && typed == null) {
             showOvernightConfirm = true
         } else {
-            performSave()
+            performSave(typedHours = typed)
         }
+    }
+
+    fun onAddChangeSave(result: AddChangeHoursResult) {
+        clockInMinutes = result.clockInMinutes
+        clockOutMinutes = result.clockOutMinutes
+        comments = result.note
+        noLunchTaken = result.noLunchTaken
+        if (result.noLunchTaken) {
+            lunchOutMinutes = null
+            lunchInMinutes = null
+            breakDurationMinutes = null
+        }
+        persistedHours = result.typedHours
+        hoursSource = HoursSource.TYPED
+        showAddChangeSheet = false
+        trySave(typedHours = result.typedHours)
     }
 
     val speechLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -394,6 +445,26 @@ fun EntryScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "No lunch taken" }
+                    ) {
+                        Checkbox(
+                            checked = noLunchTaken,
+                            onCheckedChange = { checked ->
+                                noLunchTaken = checked
+                                if (checked) {
+                                    lunchOutMinutes = null
+                                    lunchInMinutes = null
+                                    breakDurationMinutes = null
+                                    breakPaid = false
+                                }
+                            }
+                        )
+                        Text("No lunch taken", style = MaterialTheme.typography.bodyLarge)
+                    }
                     Text(
                         "Unpaid by default and subtracted from worked hours. Stays one shift — you do not need a full clock-out for lunch. Pick a duration or exact times.",
                         style = MaterialTheme.typography.bodySmall,
@@ -408,6 +479,7 @@ fun EntryScreen(
                                 lunchOutMinutes == null && lunchInMinutes == null
                             FilterChip(
                                 selected = selected,
+                                enabled = !noLunchTaken,
                                 onClick = {
                                     breakDurationMinutes = mins
                                     lunchOutMinutes = null
@@ -432,7 +504,7 @@ fun EntryScreen(
                         Checkbox(
                             checked = breakPaid,
                             onCheckedChange = { breakPaid = it },
-                            enabled = breakDurationMinutes != null &&
+                            enabled = !noLunchTaken && breakDurationMinutes != null &&
                                 lunchOutMinutes == null && lunchInMinutes == null
                         )
                         Text(
@@ -444,6 +516,7 @@ fun EntryScreen(
                         label = "Break start",
                         minutes = lunchOutMinutes,
                         optional = true,
+                        enabled = !noLunchTaken,
                         onPick = {
                             breakDurationMinutes = null
                             pickerField = ClockField.LUNCH_OUT
@@ -455,6 +528,7 @@ fun EntryScreen(
                         label = "Break end",
                         minutes = lunchInMinutes,
                         optional = true,
+                        enabled = !noLunchTaken,
                         onPick = {
                             breakDurationMinutes = null
                             pickerField = ClockField.LUNCH_IN
@@ -489,6 +563,23 @@ fun EntryScreen(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
+                    val hasHours = persistedHours != null ||
+                        (clockInMinutes != null && clockOutMinutes != null)
+                    TextButton(
+                        onClick = { showAddChangeSheet = true },
+                        enabled = !clockBusy,
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .semantics {
+                                contentDescription = if (hasHours) "Change" else "Add hours"
+                            }
+                    ) {
+                        Text(
+                            if (hasHours) "Change" else "Add hours",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                     Text(
                         when {
                             worked == null ->
@@ -754,6 +845,26 @@ fun EntryScreen(
             }
         )
     }
+    if (showAddChangeSheet) {
+        AddChangeHoursSheet(
+            title = if (persistedHours != null || (clockInMinutes != null && clockOutMinutes != null))
+                "Change hours" else "Add hours",
+            initialHours = formatHoursField(
+                persistedHours ?: worked?.hours
+            ),
+            initialClockIn = clockInMinutes,
+            initialClockOut = clockOutMinutes,
+            initialNote = comments,
+            initialNoLunchTaken = noLunchTaken,
+            clockInMinutes = clockInMinutes,
+            clockOutMinutes = clockOutMinutes,
+            onDismiss = { showAddChangeSheet = false },
+            onSave = { onAddChangeSave(it) },
+            onPickClockIn = { pickerField = ClockField.IN },
+            onPickClockOut = { pickerField = ClockField.OUT }
+        )
+    }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -785,6 +896,7 @@ private fun ClockPickerDialog(
             }
         }
     )
+
 }
 
 @Composable
@@ -792,6 +904,7 @@ private fun ClockTimeRow(
     label: String,
     minutes: Int?,
     optional: Boolean = false,
+    enabled: Boolean = true,
     onPick: () -> Unit,
     onClear: (() -> Unit)? = null,
     onSpeak: () -> Unit
@@ -799,6 +912,7 @@ private fun ClockTimeRow(
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         OutlinedButton(
             onClick = onPick,
+            enabled = enabled,
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = 48.dp)

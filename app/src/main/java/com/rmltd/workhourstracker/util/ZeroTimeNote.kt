@@ -122,14 +122,16 @@ object ZeroTimeNote {
     }
 
     /**
-     * Secondary gate: Save would store 0.00h with both clocks set.
-     * True for intentional equal in/out (zero day) OR break-eats-shift (in≠out, hours 0).
+     * Secondary gate: Save would store 0.00h.
+     * True for: typed 0; intentional equal in/out; or break-eats-shift (in≠out, hours 0).
      */
     fun needsZeroHoursReason(
         clockInMinutes: Int?,
         clockOutMinutes: Int?,
-        hoursWorked: Double?
+        hoursWorked: Double?,
+        typedHours: Double? = null
     ): Boolean {
+        if (typedHours != null && typedHours == 0.0) return true
         if (clockInMinutes == null || clockOutMinutes == null) return false
         if (clockInMinutes == clockOutMinutes) return true
         return hoursWorked != null && hoursWorked == 0.0

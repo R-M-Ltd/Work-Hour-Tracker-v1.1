@@ -519,6 +519,14 @@ private fun SearchResultRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                if (entry.noLunchTaken) {
+                    Text(
+                        "No lunch",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
                 if (entry.comments.isNotBlank()) {
                     Text(
                         entry.comments,
@@ -593,7 +601,7 @@ private fun WeekLogRow(
                                     .clickable {
                                         onEditDay(LocalDate.ofEpochDay(entry.dateEpochDay))
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 14.dp, vertical = 12.dp).heightIn(min = 48.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -615,6 +623,13 @@ private fun WeekLogRow(
                                             range,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (entry.noLunchTaken) {
+                                        Text(
+                                            "No lunch",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                         )
                                     }
                                     if (entry.comments.isNotBlank()) {

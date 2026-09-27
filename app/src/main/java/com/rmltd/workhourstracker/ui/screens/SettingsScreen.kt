@@ -35,6 +35,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.rmltd.workhourstracker.data.CloudSyncPreferences
+import com.rmltd.workhourstracker.data.sync.CloudOAuthLauncher
+import com.rmltd.workhourstracker.data.sync.CloudSyncEngine
+import com.rmltd.workhourstracker.WorkHoursApplication
+import java.text.DateFormat
+import java.util.Date
 import com.rmltd.workhourstracker.data.ReminderPreferences
 import com.rmltd.workhourstracker.data.ThemePreferences
 import com.rmltd.workhourstracker.ui.theme.AppFontStyle
@@ -58,7 +63,9 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     viewModel: WorkHoursViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSetTodaysTimes: () -> Unit = {},
+    onLogLunch: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(ReminderPreferences.isReminderEnabled(context)) }
@@ -97,7 +104,21 @@ fun SettingsScreen(
     var showSettingsPdfRangeExport by remember { mutableStateOf(false) }
     var cloudSyncEnabled by remember { mutableStateOf(CloudSyncPreferences.isEnabled(context)) }
     var cloudSyncLinked by remember { mutableStateOf(CloudSyncPreferences.isLinked(context)) }
+    var cloudProvider by remember { mutableStateOf(CloudSyncPreferences.getProvider(context)) }
+    var cloudAccount by remember { mutableStateOf(CloudSyncPreferences.getAccountName(context)) }
+    var cloudLastSync by remember { mutableStateOf(CloudSyncPreferences.getLastSyncEpochMillis(context)) }
+    var cloudError by remember { mutableStateOf(CloudSyncPreferences.getLastError(context)) }
+    var cloudBusy by remember { mutableStateOf(false) }
     var showCloudSyncInfo by remember { mutableStateOf(false) }
+
+    fun refreshCloudState() {
+        cloudSyncEnabled = CloudSyncPreferences.isEnabled(context)
+        cloudSyncLinked = CloudSyncPreferences.isLinked(context)
+        cloudProvider = CloudSyncPreferences.getProvider(context)
+        cloudAccount = CloudSyncPreferences.getAccountName(context)
+        cloudLastSync = CloudSyncPreferences.getLastSyncEpochMillis(context)
+        cloudError = CloudSyncPreferences.getLastError(context)
+    }
     val scope = rememberCoroutineScope()
     val weekStart by viewModel.weekStart.collectAsState()
     var exactAlarmsAllowed by remember {
@@ -842,6 +863,39 @@ fun SettingsScreen(
                 }
             }
 
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Today", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Shortcuts also available from Home ⋮",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = onSetTodaysTimes,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .semantics { contentDescription = "Set today's times" }
+                    ) { Text("Set today's times…", maxLines = 2, softWrap = true) }
+                    OutlinedButton(
+                        onClick = onLogLunch,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .semantics { contentDescription = "Log lunch or break" }
+                    ) { Text("Log lunch / break…", maxLines = 2, softWrap = true) }
+                }
+            }
+
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = sectionShape,
@@ -880,27 +934,158 @@ fun SettingsScreen(
                     }
                     if (cloudSyncEnabled) {
                         Text(
-                            if (cloudSyncLinked) "Linked" else "Not linked",
-                            style = MaterialTheme.typography.bodyMedium,
+                            CloudSyncPreferences.HELPER_CHOOSE,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        OutlinedButton(
-                            onClick = { showCloudSyncInfo = true },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .semantics {
-                                    contentDescription = if (cloudSyncLinked) {
-                                        "Manage cloud sync"
-                                    } else {
-                                        "Sign in to sync"
+                        CloudSyncPreferences.Provider.entries.forEach { prov ->
+                            val selected = cloudProvider == prov
+                            val linkedHere = selected && cloudSyncLinked
+                            val enabledPick = cloudProvider == null || selected
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .clickable(enabled = enabledPick && !cloudSyncLinked) {
+                                        cloudProvider = prov
+                                        CloudSyncPreferences.setProvider(context, prov)
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = {
+                                        if (!cloudSyncLinked) {
+                                            cloudProvider = prov
+                                            CloudSyncPreferences.setProvider(context, prov)
+                                        }
+                                    },
+                                    enabled = enabledPick && !cloudSyncLinked
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(prov.displayName, style = MaterialTheme.typography.bodyLarge)
+                                    if (linkedHere) {
+                                        Text(
+                                            cloudAccount ?: "Linked",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
                                 }
-                        ) {
+                            }
+                        }
+                        Text(
+                            CloudSyncPreferences.ICLOUD_FOOTNOTE,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            CloudSyncPreferences.CONFLICT_COPY,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (cloudSyncLinked) {
+                            val lastLabel = if (cloudLastSync > 0L) {
+                                "Last synced: " + DateFormat.getDateTimeInstance(
+                                    DateFormat.SHORT, DateFormat.SHORT
+                                ).format(Date(cloudLastSync))
+                            } else "Not synced yet"
+                            Text(lastLabel, style = MaterialTheme.typography.bodyMedium)
+                        } else {
                             Text(
-                                if (cloudSyncLinked) "Manage" else "Sign in to sync",
-                                maxLines = 2,
-                                softWrap = true
+                                "Not linked",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                        if (!cloudError.isNullOrBlank()) {
+                            Text(
+                                cloudError!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        if (!cloudSyncLinked) {
+                            Button(
+                                onClick = {
+                                    val prov = cloudProvider
+                                    if (prov == null) {
+                                        Toast.makeText(context, "Choose a cloud first", Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    if (!CloudOAuthLauncher.isConfigured(prov)) {
+                                        CloudSyncPreferences.setLastError(
+                                            context, CloudSyncPreferences.NOT_CONFIGURED
+                                        )
+                                        cloudError = CloudSyncPreferences.NOT_CONFIGURED
+                                        Toast.makeText(
+                                            context,
+                                            CloudSyncPreferences.NOT_CONFIGURED,
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        return@Button
+                                    }
+                                    val intent = CloudOAuthLauncher.authorizeIntent(prov)
+                                    if (intent == null) {
+                                        cloudError = CloudSyncPreferences.NOT_CONFIGURED
+                                        Toast.makeText(
+                                            context,
+                                            CloudSyncPreferences.NOT_CONFIGURED,
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    } else {
+                                        context.startActivity(intent)
+                                    }
+                                },
+                                enabled = !cloudBusy,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .semantics { contentDescription = "Sign in to sync" }
+                            ) { Text("Sign in") }
+                        } else {
+                            Button(
+                                onClick = {
+                                    cloudBusy = true
+                                    scope.launch {
+                                        try {
+                                            val app = context.applicationContext as WorkHoursApplication
+                                            val engine = CloudSyncEngine(app.repository)
+                                            when (val out = engine.syncNow(context)) {
+                                                is CloudSyncEngine.SyncOutcome.Success ->
+                                                    Toast.makeText(context, "Synced", Toast.LENGTH_SHORT).show()
+                                                is CloudSyncEngine.SyncOutcome.Error ->
+                                                    Toast.makeText(context, out.message, Toast.LENGTH_LONG).show()
+                                                else ->
+                                                    Toast.makeText(context, "Sync skipped", Toast.LENGTH_SHORT).show()
+                                            }
+                                            refreshCloudState()
+                                        } finally {
+                                            cloudBusy = false
+                                        }
+                                    }
+                                },
+                                enabled = !cloudBusy,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .semantics { contentDescription = "Sync now" }
+                            ) { Text(if (cloudBusy) "Syncing…" else "Sync now") }
+                            OutlinedButton(
+                                onClick = {
+                                    CloudSyncPreferences.unlink(context)
+                                    refreshCloudState()
+                                    Toast.makeText(
+                                        context,
+                                        "Unlinked — local hours kept",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .semantics { contentDescription = "Unlink cloud" }
+                            ) { Text("Unlink (keep local)") }
                         }
                     }
                 }
@@ -1132,22 +1317,7 @@ fun SettingsScreen(
         )
     }
 
-    if (showCloudSyncInfo) {
-        AlertDialog(
-            onDismissRequest = { showCloudSyncInfo = false },
-            title = { Text(if (cloudSyncLinked) "Manage cloud sync" else "Sign in to sync") },
-            text = {
-                Text(
-                    "Cloud sync is prepared for a future provider. " +
-                        "No automatic upload runs until you link an account in a later release. " +
-                        "Your hours stay on this device."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showCloudSyncInfo = false }) { Text("OK") }
-            }
-        )
-    }
+    // showCloudSyncInfo kept for compatibility; real UX is inline above.
 
     if (showRestoreConfirm) {
         AlertDialog(
@@ -1193,8 +1363,7 @@ fun SettingsScreen(
                                 rateText = if (rate <= 0.0) "" else "%.2f".format(Locale.US, rate)
                                 colorTheme = ThemePreferences.getColorTheme(context)
                                 fontStyle = ThemePreferences.getFontStyle(context)
-                                cloudSyncEnabled = CloudSyncPreferences.isEnabled(context)
-                                cloudSyncLinked = CloudSyncPreferences.isLinked(context)
+                                refreshCloudState()
                                 Toast.makeText(
                                     context,
                                     "Restored ${payload.entries.size} days from backup",

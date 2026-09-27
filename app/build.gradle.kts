@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
 }
+
+val localProperties = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+fun localProp(key: String): String =
+    (localProperties.getProperty(key) ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.rmltd.workhourstracker"
@@ -12,12 +22,19 @@ android {
         applicationId = "com.rmltd.workhourstracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 35
-        versionName = "1.3.33"
+        versionCode = 36
+        versionName = "1.3.34"
+
+        // Cloud OAuth client IDs from local.properties (never commit secrets).
+        // See app/CLOUD_SYNC.md — keys: DRIVE_CLIENT_ID, DROPBOX_APP_KEY, ONEDRIVE_CLIENT_ID
+        buildConfigField("String", "DRIVE_CLIENT_ID", "\"${localProp("DRIVE_CLIENT_ID")}\"")
+        buildConfigField("String", "DROPBOX_APP_KEY", "\"${localProp("DROPBOX_APP_KEY")}\"")
+        buildConfigField("String", "ONEDRIVE_CLIENT_ID", "\"${localProp("ONEDRIVE_CLIENT_ID")}\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -52,6 +69,9 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // EncryptedSharedPreferences for OAuth tokens (1.3.34 cloud sync)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

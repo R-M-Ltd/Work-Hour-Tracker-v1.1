@@ -18,12 +18,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.rmltd.workhourstracker.data.CloudSyncPreferences
+import com.rmltd.workhourstracker.data.sync.CloudOAuthLauncher
+import com.rmltd.workhourstracker.data.sync.CloudSyncEngine
 import com.rmltd.workhourstracker.ui.navigation.AppNavHost
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import android.widget.Toast
 import com.rmltd.workhourstracker.ui.theme.WorkHoursTheme
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModelFactory
 
 class MainActivity : ComponentActivity() {
+
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val viewModel: WorkHoursViewModel by viewModels {
         WorkHoursViewModelFactory(
@@ -48,6 +58,13 @@ class MainActivity : ComponentActivity() {
     private val lifecycleRefreshObserver = LifecycleEventObserver { _, event ->
         if (event == Lifecycle.Event.ON_START) {
             viewModel.onAppResume()
+            ioScope.launch {
+                runCatching {
+                    CloudSyncEngine(
+                        (application as WorkHoursApplication).repository
+                    ).syncOnResumeIfNeeded(applicationContext)
+                }
+            }
         }
     }
 
@@ -55,6 +72,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         lifecycle.addObserver(lifecycleRefreshObserver)
+        handleOAuthIntent(intent)
         setContent {
             val colorTheme by viewModel.colorTheme.collectAsState()
             val fontStyle by viewModel.fontStyle.collectAsState()
@@ -72,6 +90,24 @@ class MainActivity : ComponentActivity() {
                 AppNavHost(viewModel = viewModel)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleOAuthIntent(intent)
+    }
+
+    private fun handleOAuthIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme != "com.rmltd.workhourstracker" || uri.host != "oauth") return
+        val provider = CloudSyncPreferences.getProvider(this) ?: return
+        val ok = CloudOAuthLauncher.applyAuthRedirect(this, uri, provider)
+        Toast.makeText(
+            this,
+            if (ok) "Cloud linked" else "Sign-in did not return a token",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     override fun onStart() {
