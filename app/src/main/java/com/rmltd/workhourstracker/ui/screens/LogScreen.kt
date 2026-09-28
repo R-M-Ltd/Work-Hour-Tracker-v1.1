@@ -29,6 +29,7 @@ import com.rmltd.workhourstracker.util.WeekUtils
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,6 +50,8 @@ fun LogScreen(
     var showAddMissed by remember { mutableStateOf(false) }
     var showExportMenu by remember { mutableStateOf(false) }
     var showRangeExport by remember { mutableStateOf(false) }
+    var showPayPeriodMenu by remember { mutableStateOf(false) }
+    var showPayPeriodCustom by remember { mutableStateOf(false) }
     var noteEditEntry by remember { mutableStateOf<DailyEntry?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var searchMatches by remember { mutableStateOf<List<DailyEntry>>(emptyList()) }
@@ -80,8 +83,14 @@ fun LogScreen(
                 } else {
                     val csv = CsvExporter.buildCsv(filtered)
                     val fileName = when {
-                        start != null && end != null ->
-                            "work_hours_${start}_${end}.csv"
+                        start != null && end != null -> {
+                            val ym = YearMonth.from(start)
+                            if (start == ym.atDay(1) && end == ym.atEndOfMonth()) {
+                                "work_hours_${ym}.csv"
+                            } else {
+                                "work_hours_${start}_${end}.csv"
+                            }
+                        }
                         start != null -> "work_hours_from_${start}.csv"
                         else -> "work_hours_export.csv"
                     }
@@ -144,6 +153,13 @@ fun LogScreen(
                                 onClick = {
                                     showExportMenu = false
                                     showRangeExport = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Pay period…") },
+                                onClick = {
+                                    showExportMenu = false
+                                    showPayPeriodMenu = true
                                 }
                             )
                             DropdownMenuItem(
@@ -318,6 +334,57 @@ fun LogScreen(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+
+    if (showPayPeriodMenu) {
+        AlertDialog(
+            onDismissRequest = { showPayPeriodMenu = false },
+            title = { Text("Pay period export") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("CSV for a calendar month or custom inclusive range.")
+                    TextButton(
+                        onClick = {
+                            showPayPeriodMenu = false
+                            val ym = YearMonth.now()
+                            runExport(ym.atDay(1), ym.atEndOfMonth(), "this month")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("This month") }
+                    TextButton(
+                        onClick = {
+                            showPayPeriodMenu = false
+                            val ym = YearMonth.now().minusMonths(1)
+                            runExport(ym.atDay(1), ym.atEndOfMonth(), "last month")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Last month") }
+                    TextButton(
+                        onClick = {
+                            showPayPeriodMenu = false
+                            showPayPeriodCustom = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Custom…") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPayPeriodMenu = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showPayPeriodCustom) {
+        ExportRangeDialog(
+            initialStart = YearMonth.now().atDay(1),
+            initialEnd = YearMonth.now().atEndOfMonth(),
+            onDismiss = { showPayPeriodCustom = false },
+            onConfirm = { start, end ->
+                showPayPeriodCustom = false
+                runExport(start, end, "$start → $end")
+            }
+        )
     }
 
     if (showRangeExport) {

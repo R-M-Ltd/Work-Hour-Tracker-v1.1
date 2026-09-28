@@ -10,6 +10,7 @@ import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.DailyEntry
 import com.rmltd.workhourstracker.data.HomeClockUi
 import com.rmltd.workhourstracker.data.ReminderPreferences
+import com.rmltd.workhourstracker.data.AppearanceMode
 import com.rmltd.workhourstracker.data.ThemePreferences
 import com.rmltd.workhourstracker.ui.theme.AppFontStyle
 import com.rmltd.workhourstracker.ui.theme.AppTheme
@@ -18,6 +19,7 @@ import com.rmltd.workhourstracker.data.WeekLog
 import com.rmltd.workhourstracker.data.WorkHoursRepository
 import com.rmltd.workhourstracker.util.BackupCodec
 import com.rmltd.workhourstracker.util.WeekUtils
+import com.rmltd.workhourstracker.receiver.ClockSessionNotifier
 import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -70,6 +72,9 @@ class WorkHoursViewModel(
 
     private val _fontStyle = MutableStateFlow(ThemePreferences.getFontStyle(appContext))
     val fontStyle: StateFlow<AppFontStyle> = _fontStyle
+
+    private val _appearanceMode = MutableStateFlow(ThemePreferences.getAppearanceMode(appContext))
+    val appearanceMode: StateFlow<AppearanceMode> = _appearanceMode
 
     private val _weeklyGoalHours = MutableStateFlow(ReminderPreferences.getWeeklyGoalHours(appContext))
     val weeklyGoalHours: StateFlow<Double> = _weeklyGoalHours
@@ -410,6 +415,7 @@ class WorkHoursViewModel(
         )
         _colorTheme.value = ThemePreferences.getColorTheme(appContext)
         _fontStyle.value = ThemePreferences.getFontStyle(appContext)
+        _appearanceMode.value = ThemePreferences.getAppearanceMode(appContext)
         notifyPrefsChanged(weekStartChanged = true)
     }
 
@@ -429,6 +435,12 @@ class WorkHoursViewModel(
     fun setFontStyle(style: AppFontStyle) {
         ThemePreferences.setFontStyle(appContext, style)
         _fontStyle.value = style
+    }
+
+    fun setAppearanceMode(mode: AppearanceMode) {
+        ThemePreferences.setAppearanceMode(appContext, mode)
+        _appearanceMode.value = mode
+        refreshHomeWidget()
     }
 
     fun notifyPrefsChanged(weekStartChanged: Boolean = false) {
@@ -452,6 +464,7 @@ class WorkHoursViewModel(
 
     private fun refreshHomeWidget() {
         WorkHoursWidgetUpdater.requestUpdate(appContext)
+        ClockSessionNotifier.syncFromApp(appContext)
     }
 
     /** Refresh week boundary + Home today. Called from ON_START and date/TZ broadcasts. */
@@ -463,6 +476,7 @@ class WorkHoursViewModel(
         _weekStartDay.value = weekStartDay()
         _colorTheme.value = ThemePreferences.getColorTheme(appContext)
         _fontStyle.value = ThemePreferences.getFontStyle(appContext)
+        _appearanceMode.value = ThemePreferences.getAppearanceMode(appContext)
         viewModelScope.launch {
             runCatching { repository.catchUpWeekArchives() }
         }

@@ -45,6 +45,7 @@ import com.rmltd.workhourstracker.util.ZeroTimeNote
 import com.rmltd.workhourstracker.util.HomeOvernightCopy
 import com.rmltd.workhourstracker.util.PayEstimate
 import com.rmltd.workhourstracker.util.HoursCalc
+import com.rmltd.workhourstracker.util.SessionElapsed
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -623,23 +624,16 @@ fun HomeScreen(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            // Today's total: live elapsed when open punch; else saved/typed
+                            // Today's total: shared SessionElapsed (open live / closed saved)
                             val todayOpen = todayEntry?.clockInMinutes != null &&
                                 todayEntry?.clockOutMinutes == null &&
                                 !homeClock.overnightPending
-                            val displayTotal: Double? = when {
-                                todayOpen -> {
-                                    val inM = todayEntry!!.clockInMinutes!!
-                                    val now = java.time.LocalTime.now()
-                                    val nowM = now.hour * 60 + now.minute
-                                    // Force recomputation when ticker fires
-                                    @Suppress("UNUSED_EXPRESSION")
-                                    nowEpochMillis
-                                    HoursCalc.hoursWorked(inM, nowM)
-                                }
-                                todayEntry?.hasPersistedHours() == true -> todayEntry!!.hoursWorked
-                                else -> null
-                            }
+                            @Suppress("UNUSED_EXPRESSION")
+                            nowEpochMillis
+                            val nowM = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
+                            val displayTotal: Double? = SessionElapsed.todayDisplayHours(
+                                todayEntry, nowM
+                            )
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 displayTotal?.let { formatHours(it) } ?: "—",
@@ -799,6 +793,95 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
+                        }
+                    }
+                }
+            }
+
+            // Goals secondary card (under Today / above week list) — not a second primary CTA
+            item {
+                Spacer(Modifier.height(12.dp))
+                val nowMGoal = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
+                @Suppress("UNUSED_EXPRESSION")
+                nowEpochMillis
+                val goalHours = weeklyGoal
+                val actualHours = SessionElapsed.weekActualHours(
+                    entries, today.toEpochDay(), nowMGoal
+                )
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "Weekly goals" },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "This week goal",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (goalHours <= 0.0) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Set a weekly goal in Settings",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            TextButton(onClick = onSettings) {
+                                Text("Open Settings")
+                            }
+                        } else {
+                            val over = actualHours > goalHours
+                            val fill = (actualHours / goalHours).toFloat().coerceIn(0f, 1f)
+                            val pct = ((actualHours / goalHours) * 100.0).toInt()
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.size(72.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        progress = fill,
+                                        modifier = Modifier.fillMaxSize(),
+                                        strokeWidth = 8.dp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    Text(
+                                        "${"%.2f".format(java.util.Locale.US, actualHours)} / ${"%.2f".format(java.util.Locale.US, goalHours)}h",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        if (over) {
+                                            "$pct% · +${formatHours(actualHours - goalHours)} over"
+                                        } else {
+                                            "$pct%"
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    TextButton(
+                                        onClick = onSettings,
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text("Edit goal in Settings")
+                                    }
+                                }
+                            }
                         }
                     }
                 }

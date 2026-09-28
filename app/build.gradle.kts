@@ -22,8 +22,8 @@ android {
         applicationId = "com.rmltd.workhourstracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 39
-        versionName = "1.3.37"
+        versionCode = 40
+        versionName = "1.3.38"
 
         // Cloud OAuth client IDs from local.properties (never commit secrets).
         // See app/CLOUD_SYNC.md — keys: DRIVE_CLIENT_ID, DROPBOX_APP_KEY, ONEDRIVE_CLIENT_ID

@@ -27,6 +27,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import android.widget.Toast
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.rmltd.workhourstracker.data.AppearanceMode
 import com.rmltd.workhourstracker.ui.theme.WorkHoursTheme
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModelFactory
@@ -76,7 +78,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val colorTheme by viewModel.colorTheme.collectAsState()
             val fontStyle by viewModel.fontStyle.collectAsState()
-            WorkHoursTheme(theme = colorTheme, fontStyle = fontStyle) {
+            val appearanceMode by viewModel.appearanceMode.collectAsState()
+            val systemDark = isSystemInDarkTheme()
+            val darkTheme = appearanceMode.resolveDark(systemDark)
+            WorkHoursTheme(theme = colorTheme, fontStyle = fontStyle, darkTheme = darkTheme) {
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { /* No-op either way — the app is fully usable without notifications. */ }

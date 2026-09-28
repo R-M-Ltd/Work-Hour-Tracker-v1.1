@@ -11,7 +11,9 @@ import androidx.core.app.NotificationCompat
 import com.rmltd.workhourstracker.MainActivity
 import com.rmltd.workhourstracker.R
 import com.rmltd.workhourstracker.WorkHoursApplication
+import com.rmltd.workhourstracker.data.ClockDayState
 import com.rmltd.workhourstracker.data.ReminderPreferences
+import com.rmltd.workhourstracker.util.EndOfDayCompleteness
 import com.rmltd.workhourstracker.worker.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,10 +21,9 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * End-of-day reminder: fires once when still clocked in past the user cutoff.
- * Actions: Clock out (now) or Extend (snooze 1 hour). Always re-arms the next
- * scheduled cutoff (or snooze one-shot). On check failure: fail-closed on notify,
- * schedule a short same-day retry without marking fired.
+ * End-of-day reminder polish (1.3.38): empty → gentle wrap-up; incomplete →
+ * still clocked in; complete → skip. Actions: Open app + Dismiss only —
+ * **no Clock out** (shade owns punch actions on channel clock_session).
  */
 class EndOfDayReminderReceiver : BroadcastReceiver() {
 
@@ -42,35 +43,39 @@ class EndOfDayReminderReceiver : BroadcastReceiver() {
                 val today = LocalDate.now().toEpochDay()
                 val alreadyFiredToday =
                     ReminderPreferences.getEndOfDayFiredEpochDay(context) == today
-                // Snooze / same-day retry may notify again; regular cutoff is once per day.
                 if (alreadyFiredToday && !isSnooze && !isRetry) {
                     ReminderScheduler.scheduleEndOfDayReminder(context)
                     return@launch
                 }
 
                 val app = context.applicationContext as? WorkHoursApplication
-                val open = runCatching {
-                    app?.repository?.isStillClockedIn() == true
-                }.getOrElse {
-                    // Treat repository failure like outer catch: fail closed + retry.
+                val repo = app?.repository
+                val todayEntry = runCatching { repo?.entryForDateOnce(LocalDate.now()) }.getOrElse {
                     throw it
                 }
+                val openEntry = runCatching { repo?.findOpenEntryOnce() }.getOrElse { throw it }
+                val overnightOrOrphan = openEntry != null &&
+                    openEntry.dateEpochDay != today &&
+                    ClockDayState.isOvernightOpen(openEntry.clockInMinutes, openEntry.clockOutMinutes)
 
-                if (open) {
+                val state = EndOfDayCompleteness.classify(todayEntry, overnightOrOrphan)
+                val copy = EndOfDayCompleteness.notificationCopy(state)
+                if (copy != null) {
                     ReminderPreferences.markEndOfDayFired(context, today)
                     ReminderPreferences.clearEndOfDaySnooze(context)
                     ReminderScheduler.cancelEndOfDaySameDayRetry(context)
-                    showNotification(context)
+                    showNotification(context, copy.title, copy.body)
+                } else {
+                    // Complete day — skip notify; still mark fired so we do not re-ping.
+                    ReminderPreferences.markEndOfDayFired(context, today)
+                    ReminderPreferences.clearEndOfDaySnooze(context)
+                    ReminderScheduler.cancelEndOfDaySameDayRetry(context)
                 }
 
-                // Re-arm next cutoff (snooze path schedules its own one-shot separately).
                 if (!isSnooze && !isRetry) {
                     ReminderScheduler.scheduleEndOfDayReminder(context)
                 }
             } catch (_: Exception) {
-                // Fail closed on notify: never show "Still clocked in" when open
-                // state is unknown. Do NOT mark fired. Schedule a short same-day
-                // one-shot retry, and re-arm the next cutoff for the regular path.
                 ReminderScheduler.scheduleEndOfDaySameDayRetry(context)
                 if (!isSnooze && !isRetry) {
                     ReminderScheduler.scheduleEndOfDayReminder(context)
@@ -81,7 +86,7 @@ class EndOfDayReminderReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun showNotification(context: Context) {
+    private fun showNotification(context: Context, title: String, body: String) {
         val channelId = CHANNEL_ID
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -89,9 +94,11 @@ class EndOfDayReminderReceiver : BroadcastReceiver() {
             manager.createNotificationChannel(
                 NotificationChannel(
                     channelId,
-                    "End-of-day clock-out reminder",
-                    NotificationManager.IMPORTANCE_HIGH
-                )
+                    "End-of-day reminder",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Gentle wrap-up when today is empty or unfinished"
+                }
             )
         }
 
@@ -103,30 +110,15 @@ class EndOfDayReminderReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val clockOutIntent = Intent(context, EndOfDayActionReceiver::class.java).apply {
-            action = EndOfDayActionReceiver.ACTION_CLOCK_OUT
-        }
-        val clockOutPending = PendingIntent.getBroadcast(
-            context, 1, clockOutIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val extendIntent = Intent(context, EndOfDayActionReceiver::class.java).apply {
-            action = EndOfDayActionReceiver.ACTION_EXTEND
-        }
-        val extendPending = PendingIntent.getBroadcast(
-            context, 2, extendIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Still clocked in")
-            .setContentText("Past your end-of-day time. Clock out now, or extend for 1 hour.")
+            .setContentTitle(title)
+            .setContentText(body)
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
-            .addAction(0, "Clock out", clockOutPending)
-            .addAction(0, "Extend 1h", extendPending)
+            .setOnlyAlertOnce(true)
+            // Open app only — no Clock out / Extend (shade owns punch actions).
+            .addAction(0, "Open app", contentIntent)
             .build()
 
         manager.notify(NOTIFICATION_ID, notification)

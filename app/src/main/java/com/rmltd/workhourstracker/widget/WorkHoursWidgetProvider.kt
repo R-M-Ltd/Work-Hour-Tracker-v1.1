@@ -35,4 +35,8 @@ class WorkHoursWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         WorkHoursWidgetUpdater.requestUpdate(context)
     }
+
+    override fun onDisabled(context: Context) {
+        WorkHoursWidgetUpdater.cancelOpenSessionRefresh(context)
+    }
 }

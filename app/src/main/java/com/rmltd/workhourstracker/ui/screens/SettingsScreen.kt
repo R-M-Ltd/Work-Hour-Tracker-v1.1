@@ -40,7 +40,10 @@ import com.rmltd.workhourstracker.data.sync.CloudSyncEngine
 import com.rmltd.workhourstracker.WorkHoursApplication
 import java.text.DateFormat
 import java.util.Date
+import com.rmltd.workhourstracker.data.AppearanceMode
+import com.rmltd.workhourstracker.data.BackupPreferences
 import com.rmltd.workhourstracker.data.ReminderPreferences
+import com.rmltd.workhourstracker.data.ShadePreferences
 import com.rmltd.workhourstracker.data.ThemePreferences
 import com.rmltd.workhourstracker.ui.theme.AppFontStyle
 import com.rmltd.workhourstracker.ui.theme.AppTheme
@@ -50,10 +53,13 @@ import com.rmltd.workhourstracker.util.BackupShare
 import com.rmltd.workhourstracker.util.CsvExporter
 import com.rmltd.workhourstracker.util.PdfExporter
 import com.rmltd.workhourstracker.util.HoursCalc
+import com.rmltd.workhourstracker.receiver.ClockSessionNotifier
+import com.rmltd.workhourstracker.widget.WidgetThemeColors
 import com.rmltd.workhourstracker.util.WeekUtils
 import com.rmltd.workhourstracker.worker.ReminderScheduler
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursResult
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursSheet
@@ -62,6 +68,7 @@ import com.rmltd.workhourstracker.util.HomeManualTimes
 import com.rmltd.workhourstracker.util.ZeroTimeNote
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.DayOfWeek
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -99,7 +106,15 @@ fun SettingsScreen(
         )
     }
     var colorTheme by remember { mutableStateOf(ThemePreferences.getColorTheme(context)) }
+    var appearanceMode by remember { mutableStateOf(ThemePreferences.getAppearanceMode(context)) }
     var fontStyle by remember { mutableStateOf(ThemePreferences.getFontStyle(context)) }
+    var shadeClockControls by remember {
+        mutableStateOf(ShadePreferences.isClockControlsEnabled(context))
+    }
+    var lastBackupEpoch by remember {
+        mutableStateOf(BackupPreferences.getLastBackupEpochMillis(context))
+    }
+    var showPayPeriodCustom by remember { mutableStateOf(false) }
     var colorSectionExpanded by remember { mutableStateOf(true) }
     var backupBusy by remember { mutableStateOf(false) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
@@ -146,6 +161,40 @@ fun SettingsScreen(
         cloudSigningIn = false
     }
     val scope = rememberCoroutineScope()
+
+
+    fun exportPayPeriodCsv(start: LocalDate, end: LocalDate, fileName: String) {
+        backupBusy = true
+        scope.launch {
+            try {
+                val weeks = viewModel.loadExportWeeks()
+                val filtered = CsvExporter.filterByDateRange(weeks, start, end)
+                val n = filtered.sumOf { it.second.size }
+                if (n == 0) {
+                    Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                } else {
+                    val intent = CsvExporter.shareCsv(
+                        context,
+                        CsvExporter.buildCsv(filtered),
+                        fileName
+                    )
+                    context.startActivity(
+                        Intent.createChooser(intent, "Export work hours CSV")
+                    )
+                    Toast.makeText(
+                        context,
+                        "Exported $start → $end ($n days)",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                backupBusy = false
+            }
+        }
+    }
+
     val weekEntries by viewModel.currentWeekEntries.collectAsState()
     val today = LocalDate.now()
     val todayEntry = viewModel.entryFor(today, weekEntries)
@@ -416,6 +465,61 @@ fun SettingsScreen(
                 }
             }
 
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Notification clock controls",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Shade Clock out")
+                            Text(
+                                "When on and clocked in, show an ongoing notification with elapsed time and Clock out. Off by default.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = shadeClockControls,
+                            onCheckedChange = { on ->
+                                if (on && !ReminderScheduler.areNotificationsEnabled(context)) {
+                                    Toast.makeText(
+                                        context,
+                                        "Allow notifications to use clock controls",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    ReminderScheduler.openAppNotificationSettings(context)
+                                    return@Switch
+                                }
+                                shadeClockControls = on
+                                ShadePreferences.setClockControlsEnabled(context, on)
+                                if (on) {
+                                    ClockSessionNotifier.syncFromApp(context)
+                                    Toast.makeText(context, "Clock controls on", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    ClockSessionNotifier.cancel(context)
+                                    Toast.makeText(context, "Clock controls off", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = sectionShape,
@@ -432,10 +536,10 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Still clocked in")
+                            Text("End of day")
                             Text(
-                                "One notification if you are still clocked in past this time. " +
-                                    "Actions: clock out or extend 1 hour.",
+                                "Gentle wrap-up if today is empty or unfinished. " +
+                                    "Skips the ping if today is already complete.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -546,6 +650,50 @@ fun SettingsScreen(
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Appearance",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Choose System, Light, or Dark. Applies immediately to the app and home-screen widget.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        AppearanceMode.entries.forEach { mode ->
+                            val selected = appearanceMode == mode
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    appearanceMode = mode
+                                    viewModel.setAppearanceMode(mode)
+                                    Toast.makeText(
+                                        context,
+                                        "${mode.displayName} appearance",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                label = { Text(mode.displayName) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // "Color" label is a second entry point: tap expands/collapses the same theme radios.
@@ -562,20 +710,77 @@ fun SettingsScreen(
                     )
                     Text(
                         if (colorSectionExpanded) {
-                            "Light/dark still follows the system setting. Choose a palette below, or tap Color to hide."
+                            "Light/dark is controlled by Appearance above. Choose a palette below, or tap Color to hide."
                         } else {
-                            "Light/dark still follows the system setting. Tap Color to expand and choose a palette."
+                            "Light/dark is controlled by Appearance above. Tap Color to expand and choose a palette."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "Home-screen widget uses the same color palette (and light/dark) as the app.",
+                        "Home-screen widget uses the same color palette (and light/dark) as the app. Widget updates about every minute while clocked in.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (colorSectionExpanded) {
                         Spacer(Modifier.height(4.dp))
+                        // Arc Clock / widget live preview (sample chrome; no Room loop)
+                        val systemDark = (context.resources.configuration.uiMode and
+                            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                            android.content.res.Configuration.UI_MODE_NIGHT_YES
+                        val previewDark = appearanceMode.resolveDark(systemDark)
+                        val previewColors = WidgetThemeColors.resolve(colorTheme, previewDark)
+                        ElevatedCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .semantics { contentDescription = "Home-screen widget preview" },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.elevatedCardColors(
+                                containerColor = Color(previewColors.primaryContainer)
+                            ),
+                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF5B3F9E))
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        "Work Hours",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(previewColors.primary)
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "Clocked in since 8:02 AM",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(previewColors.onSurface)
+                                )
+                                Text(
+                                    "Today: 3.50h",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(previewColors.onSurface)
+                                )
+                                Text(
+                                    "Week 12.50h / 40.00h",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(previewColors.onSurfaceVariant)
+                                )
+                            }
+                        }
+                        Text(
+                            "Home-screen widget preview",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                        )
                         AppTheme.entries.forEach { option ->
                             val selected = colorTheme == option
                             val shape = RoundedCornerShape(12.dp)
@@ -691,6 +896,33 @@ fun SettingsScreen(
                                     onClick = {
                                         showSettingsExportMenu = false
                                         showSettingsRangeExport = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("This month (pay period)") },
+                                    onClick = {
+                                        showSettingsExportMenu = false
+                                        val ym = YearMonth.now()
+                                        val start = ym.atDay(1)
+                                        val end = ym.atEndOfMonth()
+                                        exportPayPeriodCsv(start, end, "work_hours_${ym}.csv")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Last month (pay period)") },
+                                    onClick = {
+                                        showSettingsExportMenu = false
+                                        val ym = YearMonth.now().minusMonths(1)
+                                        val start = ym.atDay(1)
+                                        val end = ym.atEndOfMonth()
+                                        exportPayPeriodCsv(start, end, "work_hours_${ym}.csv")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Custom pay period…") },
+                                    onClick = {
+                                        showSettingsExportMenu = false
+                                        showPayPeriodCustom = true
                                     }
                                 )
                                 DropdownMenuItem(
@@ -842,6 +1074,27 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    val backupLabel = if (lastBackupEpoch <= 0L) {
+                        "Last backed up: Never"
+                    } else {
+                        "Last backed up: " + DateFormat.getDateTimeInstance(
+                            DateFormat.MEDIUM, DateFormat.SHORT
+                        ).format(Date(lastBackupEpoch))
+                    }
+                    Text(
+                        backupLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.semantics { contentDescription = "Last backed up" }
+                    )
+                    if (BackupPreferences.isBackupStale(context)) {
+                        Text(
+                            if (lastBackupEpoch <= 0L) "Backup recommended"
+                            else "Backup is over a week old",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Button(
                         onClick = {
                             if (backupBusy) return@Button
@@ -860,6 +1113,9 @@ fun SettingsScreen(
                                     context.startActivity(
                                         Intent.createChooser(intent, "Share work hours backup")
                                     )
+                                    val now = System.currentTimeMillis()
+                                    BackupPreferences.setLastBackupEpochMillis(context, now)
+                                    lastBackupEpoch = now
                                     Toast.makeText(context, "Backup ready to share", Toast.LENGTH_SHORT).show()
                                 } catch (e: Exception) {
                                     Toast.makeText(
@@ -1320,6 +1576,24 @@ fun SettingsScreen(
         )
     }
 
+
+    if (showPayPeriodCustom) {
+        val ym = YearMonth.now()
+        ExportRangeDialog(
+            initialStart = ym.atDay(1),
+            initialEnd = ym.atEndOfMonth(),
+            onDismiss = { showPayPeriodCustom = false },
+            onConfirm = { start, end ->
+                showPayPeriodCustom = false
+                if (end.isBefore(start)) {
+                    Toast.makeText(context, "End date must be on or after start", Toast.LENGTH_SHORT).show()
+                } else {
+                    exportPayPeriodCsv(start, end, "work_hours_${start}_${end}.csv")
+                }
+            }
+        )
+    }
+
     if (showSettingsRangeExport) {
         ExportRangeDialog(
             initialStart = weekStart,
@@ -1472,6 +1746,11 @@ fun SettingsScreen(
                                 rateText = if (rate <= 0.0) "" else "%.2f".format(Locale.US, rate)
                                 colorTheme = ThemePreferences.getColorTheme(context)
                                 fontStyle = ThemePreferences.getFontStyle(context)
+                                appearanceMode = ThemePreferences.getAppearanceMode(context)
+                                // Restore stamps restore time only — never last backed up.
+                                BackupPreferences.setLastRestoreEpochMillis(
+                                    context, System.currentTimeMillis()
+                                )
                                 refreshCloudState()
                                 Toast.makeText(
                                     context,

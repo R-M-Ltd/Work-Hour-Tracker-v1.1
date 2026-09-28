@@ -123,20 +123,13 @@ class EndOfDayActionReceiver : BroadcastReceiver() {
             context, 0, openApp,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val clockOutIntent = Intent(context, EndOfDayActionReceiver::class.java).apply {
-            action = ACTION_CLOCK_OUT
-        }
-        val clockOutPending = PendingIntent.getBroadcast(
-            context, 1, clockOutIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Still clocked in")
             .setContentText(body)
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
-            .addAction(0, "Clock out", clockOutPending)
+            .addAction(0, "Open app", contentIntent)
             .build()
         manager.notify(EndOfDayReminderReceiver.NOTIFICATION_ID, notification)
     }
