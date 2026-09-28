@@ -22,6 +22,15 @@ class WorkHoursApplication : Application() {
             weekStartDay = { ReminderPreferences.getWeekStartDay(this) },
             onDayFullySaved = { date ->
                 HomeDraftPreferences.clearIfEpochDay(this, date.toEpochDay())
+            },
+            onCommentsOnlySaved = { date, comments, roomIn, roomOut ->
+                HomeDraftPreferences.reconcileCommentsOnly(
+                    this,
+                    date.toEpochDay(),
+                    comments,
+                    roomIn,
+                    roomOut
+                )
             }
         )
     }

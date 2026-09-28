@@ -158,4 +158,31 @@ class ZeroTimeNoteTest {
             ZeroTimeNote.RESTORED_UNSAVED_TIMES_TOAST
         )
     }
+
+    @Test
+    fun hasZeroHoursReason_linePrefix() {
+        assertTrue(ZeroTimeNote.hasZeroHoursReason("0 hours: unpaid"))
+        assertTrue(ZeroTimeNote.hasZeroHoursReason("Note\n0 hours: day off\nMore"))
+        assertTrue(ZeroTimeNote.hasZeroHoursReason("  0 hours: spaced  "))
+        assertFalse(ZeroTimeNote.hasZeroHoursReason(""))
+        assertFalse(ZeroTimeNote.hasZeroHoursReason("zero hours: wrong prefix"))
+        assertFalse(ZeroTimeNote.hasZeroHoursReason("Had 0 hours yesterday"))
+    }
+
+    @Test
+    fun zeroHoursReprompt_skipWhenReasonPresent() {
+        // Re-Save already-zero with reason → gate would fire but hasReason skips dialog
+        assertTrue(ZeroTimeNote.needsZeroHoursReason(480, 480, 0.0, typedHours = 0.0))
+        assertTrue(ZeroTimeNote.hasZeroHoursReason("0 hours: training"))
+        // Wipe reason → dialog returns
+        assertFalse(ZeroTimeNote.hasZeroHoursReason("plain note"))
+    }
+
+    @Test
+    fun zeroHoursReasonPresentCaption_packCopy() {
+        assertEquals(
+            "0.00h — reason already on note",
+            ZeroTimeNote.ZERO_HOURS_REASON_PRESENT_CAPTION
+        )
+    }
 }

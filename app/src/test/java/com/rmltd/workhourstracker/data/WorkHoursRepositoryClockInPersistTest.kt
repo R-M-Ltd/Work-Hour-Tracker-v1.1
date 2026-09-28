@@ -21,7 +21,7 @@ class WorkHoursRepositoryClockInPersistTest {
     private val tenAm = 10 * 60
 
     private fun newRepo(dao: FakeWorkHoursDao = FakeWorkHoursDao()) =
-        dao to WorkHoursRepository(dao) { DayOfWeek.WEDNESDAY }
+        dao to WorkHoursRepository(dao, weekStartDay = { DayOfWeek.WEDNESDAY })
 
     @Test
     fun clockInNow_persistsOpenPunch_readableAfterFreshLookup() = runBlocking {
@@ -30,7 +30,7 @@ class WorkHoursRepositoryClockInPersistTest {
         assertEquals(ClockInResult.STARTED, result)
 
         // Simulate process death: drop the repository, keep the dao (Room file).
-        val repo2 = WorkHoursRepository(dao) { DayOfWeek.WEDNESDAY }
+        val repo2 = WorkHoursRepository(dao, weekStartDay = { DayOfWeek.WEDNESDAY })
         val loaded = repo2.entryForDateOnce(today)
         assertNotNull(loaded)
         assertEquals(nineAm, loaded!!.clockInMinutes)
@@ -47,7 +47,7 @@ class WorkHoursRepositoryClockInPersistTest {
         assertEquals(ClockInResult.STARTED, repo.clockInNow(today, nineAm))
         assertTrue(repo.updateOpenClockIn(today, tenAm))
 
-        val loaded = WorkHoursRepository(dao) { DayOfWeek.WEDNESDAY }.entryForDateOnce(today)
+        val loaded = WorkHoursRepository(dao, weekStartDay = { DayOfWeek.WEDNESDAY }).entryForDateOnce(today)
         assertEquals(tenAm, loaded!!.clockInMinutes)
         assertNull(loaded.clockOutMinutes)
     }
@@ -229,15 +229,19 @@ class WorkHoursRepositoryClockInPersistTest {
         assertEquals(listOf(today), saved)
     }
 
-    /** D4: comments-only upsert clears Home draft via onDayFullySaved. */
+    /** S1: comments-only upsert uses onCommentsOnlySaved (not full onDayFullySaved). */
     @Test
-    fun updateEntryComments_success_invokesOnDayFullySaved() = runBlocking {
+    fun updateEntryComments_success_invokesOnCommentsOnlySaved() = runBlocking {
         val dao = FakeWorkHoursDao()
-        val saved = mutableListOf<LocalDate>()
+        val fullClears = mutableListOf<LocalDate>()
+        val commentsOnly = mutableListOf<Triple<LocalDate, String, Pair<Int?, Int?>>>()
         val repo = WorkHoursRepository(
             dao,
             weekStartDay = { DayOfWeek.WEDNESDAY },
-            onDayFullySaved = { saved.add(it) }
+            onDayFullySaved = { fullClears.add(it) },
+            onCommentsOnlySaved = { date, comments, roomIn, roomOut ->
+                commentsOnly.add(Triple(date, comments, roomIn to roomOut))
+            }
         )
         dao.upsertEntry(
             DailyEntry(
@@ -250,20 +254,28 @@ class WorkHoursRepositoryClockInPersistTest {
             )
         )
         assertTrue(repo.updateEntryComments(today, "new note"))
-        assertEquals(listOf(today), saved)
+        assertTrue(fullClears.isEmpty())
+        assertEquals(1, commentsOnly.size)
+        assertEquals(today, commentsOnly[0].first)
+        assertEquals("new note", commentsOnly[0].second)
+        assertEquals(nineAm, commentsOnly[0].third.first)
+        assertEquals(tenAm + 7 * 60, commentsOnly[0].third.second)
         assertEquals("new note", repo.entryForDateOnce(today)!!.comments)
     }
 
     @Test
-    fun updateEntryComments_missingRow_doesNotInvokeOnDayFullySaved() = runBlocking {
+    fun updateEntryComments_missingRow_doesNotInvokeOnCommentsOnlySaved() = runBlocking {
         val dao = FakeWorkHoursDao()
-        val saved = mutableListOf<LocalDate>()
+        val fullClears = mutableListOf<LocalDate>()
+        val commentsOnly = mutableListOf<LocalDate>()
         val repo = WorkHoursRepository(
             dao,
             weekStartDay = { DayOfWeek.WEDNESDAY },
-            onDayFullySaved = { saved.add(it) }
+            onDayFullySaved = { fullClears.add(it) },
+            onCommentsOnlySaved = { date, _, _, _ -> commentsOnly.add(date) }
         )
         assertFalse(repo.updateEntryComments(today, "orphan"))
-        assertTrue(saved.isEmpty())
+        assertTrue(fullClears.isEmpty())
+        assertTrue(commentsOnly.isEmpty())
     }
 }

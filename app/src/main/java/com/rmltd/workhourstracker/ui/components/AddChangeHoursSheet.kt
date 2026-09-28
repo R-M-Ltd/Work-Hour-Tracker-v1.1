@@ -49,6 +49,13 @@ data class AddChangeHoursResult(
     val noLunchTaken: Boolean
 )
 
+/** Live sheet fields when suspending for TimePicker (S4). */
+data class AddChangeHoursDraft(
+    val hoursText: String,
+    val note: String,
+    val noLunchTaken: Boolean
+)
+
 /**
  * Shared Add / Change / Set today's times sheet (1.3.34).
  * Hours required (decimal only). Optional clocks, note, No lunch taken.
@@ -64,8 +71,8 @@ fun AddChangeHoursSheet(
     initialNoLunchTaken: Boolean,
     onDismiss: () -> Unit,
     onSave: (AddChangeHoursResult) -> Unit,
-    onPickClockIn: (() -> Unit)? = null,
-    onPickClockOut: (() -> Unit)? = null,
+    onPickClockIn: ((AddChangeHoursDraft) -> Unit)? = null,
+    onPickClockOut: ((AddChangeHoursDraft) -> Unit)? = null,
     /** When parent drives clock pickers externally, pass live minutes. */
     clockInMinutes: Int? = initialClockIn,
     clockOutMinutes: Int? = initialClockOut
@@ -112,6 +119,8 @@ fun AddChangeHoursSheet(
                 supportingText = {
                     when {
                         hoursError != null -> Text(hoursError)
+                        parsed == 0.0 && ZeroTimeNote.hasZeroHoursReason(note) ->
+                            Text(ZeroTimeNote.ZERO_HOURS_REASON_PRESENT_CAPTION)
                         parsed == 0.0 -> Text(ZeroTimeNote.ZERO_HOURS_SAVE_CAPTION)
                         else -> Text("Decimals only — tenths OK. Colon times not accepted.")
                     }
@@ -132,7 +141,11 @@ fun AddChangeHoursSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
-                    onClick = { onPickClockIn?.invoke() },
+                    onClick = {
+                        onPickClockIn?.invoke(
+                            AddChangeHoursDraft(hoursText, note, noLunch)
+                        )
+                    },
                     enabled = onPickClockIn != null,
                     modifier = Modifier
                         .weight(1f)
@@ -147,7 +160,11 @@ fun AddChangeHoursSheet(
                     )
                 }
                 OutlinedButton(
-                    onClick = { onPickClockOut?.invoke() },
+                    onClick = {
+                        onPickClockOut?.invoke(
+                            AddChangeHoursDraft(hoursText, note, noLunch)
+                        )
+                    },
                     enabled = onPickClockOut != null,
                     modifier = Modifier
                         .weight(1f)

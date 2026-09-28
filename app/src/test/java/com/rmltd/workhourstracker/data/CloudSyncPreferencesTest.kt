@@ -40,6 +40,10 @@ class CloudSyncPreferencesTest {
             CloudSyncPreferences.AUTH_CODE_EDUCATION
         )
         assertEquals("Opening your cloud account…", CloudSyncPreferences.SIGNING_IN)
+        assertEquals(
+            "Not synced yet — tap Sync now",
+            CloudSyncPreferences.NOT_SYNCED_YET
+        )
     }
 
     @Test

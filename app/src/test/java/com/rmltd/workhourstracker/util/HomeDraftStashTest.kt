@@ -202,4 +202,66 @@ class HomeDraftStashTest {
         )
         assertEquals(HomeDraftRestoreDecision.None, decision)
     }
+
+    @Test
+    fun decideCommentsOnlyReconcile_dirtyOut_keepsClocksUpdatesComments() {
+        val stash = HomeDraftSnapshot(
+            epochDay = 10L,
+            inMinutes = 480,
+            outMinutes = 1020,
+            comments = "draft note"
+        )
+        val decision = HomeDraftStash.decideCommentsOnlyReconcile(
+            stash = stash,
+            epochDay = 10L,
+            newComments = "history note",
+            roomIn = 480,
+            roomOut = null // dirty OUT
+        )
+        val keep = decision as CommentsOnlyReconcileDecision.KeepClocksUpdateComments
+        assertEquals(480, keep.snapshot.inMinutes)
+        assertEquals(1020, keep.snapshot.outMinutes)
+        assertEquals("history note", keep.snapshot.comments)
+        assertEquals(10L, keep.snapshot.epochDay)
+    }
+
+    @Test
+    fun decideCommentsOnlyReconcile_clocksEqualRoom_clears() {
+        val stash = HomeDraftSnapshot(
+            epochDay = 10L,
+            inMinutes = 480,
+            outMinutes = 1020,
+            comments = "only comments dirty"
+        )
+        val decision = HomeDraftStash.decideCommentsOnlyReconcile(
+            stash = stash,
+            epochDay = 10L,
+            newComments = "saved note",
+            roomIn = 480,
+            roomOut = 1020
+        )
+        assertEquals(CommentsOnlyReconcileDecision.Clear, decision)
+    }
+
+    @Test
+    fun decideCommentsOnlyReconcile_nullOrWrongEpoch_noOp() {
+        assertEquals(
+            CommentsOnlyReconcileDecision.NoOp,
+            HomeDraftStash.decideCommentsOnlyReconcile(null, 10L, "n", 480, 1020)
+        )
+        val stash = HomeDraftSnapshot(9L, 480, 1020, "x")
+        assertEquals(
+            CommentsOnlyReconcileDecision.NoOp,
+            HomeDraftStash.decideCommentsOnlyReconcile(stash, 10L, "n", 480, null)
+        )
+    }
+
+    @Test
+    fun decideCommentsOnlyReconcile_emptyClocksMatchingNullRoom_clears() {
+        val stash = HomeDraftSnapshot(10L, null, null, "comments only")
+        assertEquals(
+            CommentsOnlyReconcileDecision.Clear,
+            HomeDraftStash.decideCommentsOnlyReconcile(stash, 10L, "new", null, null)
+        )
+    }
 }

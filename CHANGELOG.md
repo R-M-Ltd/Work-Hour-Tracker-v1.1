@@ -3,6 +3,34 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## 1.3.39 (versionCode 41)
+
+Leftover cleanup on tip `dd0be56` (1.3.38 / vc 40):
+
+- **L1:** Remove orphan `EndOfDayActionReceiver` + manifest entry (`ACTION_EOD_CLOCK_OUT` / `ACTION_EOD_EXTEND`). EOD stays Open-app-only on `end_of_day_reminder`; shade Clock out remains on `clock_session`.
+- **S1:** Comments-only History/Log note save preserves dirty Home IN/OUT stash (narrow D4); full clear when clocks clean or on day-authoritative writes.
+- **S3:** Skip “Reason for 0 hours?” when note already has a `0 hours:` line; midnight 12:00 AM path unchanged.
+- **S4:** Add/Change sheet suspends while TimePicker is open (one modal) on Home, Entry, and Settings Today.
+- **S5:** Cloud card clarity — linked + never synced shows “Not synced yet — tap Sync now”; default off unchanged; last-synced ≠ last-backed-up.
+- **L2:** Document 1.3.38 polish + this cleanup.
+- **S2:** Arc Clock / splash `#5B3F9E` verified untouched.
+- **Backup (optional):** Stamp “Last backed up” only on share-chooser `RESULT_OK` (best-effort).
+
+Protected: Lunch CTA, EOD completeness / Open-app-only, CSV/PDF, locked hexes, D1–D3, cloud-off, onboarding 1.3.37, typed Add/Change, Home declutter, 1.3.38 polish.
+
+## 1.3.38 (versionCode 40)
+
+Polish batch at tip `dd0be56`:
+
+- **Appearance:** System / Light / Dark above Color in Settings; widget chrome follows Appearance then palette.
+- **Arc Clock live preview** in Color expand; chip on `#5B3F9E`.
+- **Widget:** Today line for open session + ~60s AlarmManager refresh; no punch buttons.
+- **Goals:** Home secondary ring under Today; shared `SessionElapsed` with widget / Today.
+- **Backup:** “Last backed up” stamp (separate from cloud Last synced).
+- **Pay-period CSV:** Settings + History additive menus; exporters schema unchanged.
+- **EOD:** Skip notify when today complete; Open app only; channel `end_of_day_reminder`.
+- **Shade:** `clock_session` toggle default off; Clock out when on + clocked in.
+
 ## 1.3.34 (versionCode 36)
 
 - **Home declutter:** week title + total + single ⋮; one stateful Clock in/out; Change/Add under today’s total; History/Settings/Forgot/Lunch/Set times via ⋮; bottom History removed.

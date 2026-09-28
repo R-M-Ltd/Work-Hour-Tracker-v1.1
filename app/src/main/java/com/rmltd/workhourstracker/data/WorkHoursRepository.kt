@@ -60,7 +60,12 @@ class WorkHoursRepository(
     private val dao: WorkHoursDao,
     private val weekStartDay: () -> DayOfWeek = { DayOfWeek.WEDNESDAY },
     /** D1: clear Home draft stash after any authoritative closed-day Room write. */
-    private val onDayFullySaved: (LocalDate) -> Unit = {}
+    private val onDayFullySaved: (LocalDate) -> Unit = {},
+    /**
+     * S1: comments-only History/Log write — narrow stash reconcile (preserve dirty IN/OUT).
+     * Args: date, new comments, Room clockIn, Room clockOut.
+     */
+    private val onCommentsOnlySaved: (LocalDate, String, Int?, Int?) -> Unit = { _, _, _, _ -> }
 ) {
 
     private val clockMutex = Mutex()
@@ -608,9 +613,13 @@ class WorkHoursRepository(
                 updatedAtEpochMillis = System.currentTimeMillis()
             )
         )
-        // D4: comments-only day write is authoritative for that epoch — clear Home draft
-        // (same Application hook as upsertClosedEntry → HomeDraftPreferences.clearIfEpochDay).
-        onDayFullySaved(date)
+        // S1: narrow D4 — reconcile comments on dirty IN/OUT stash; full clear only when clocks clean.
+        onCommentsOnlySaved(
+            date,
+            comments,
+            existing.clockInMinutes,
+            existing.clockOutMinutes
+        )
         true
     }
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.data.HoursSource
+import com.rmltd.workhourstracker.ui.components.AddChangeHoursDraft
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursResult
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursSheet
 import com.rmltd.workhourstracker.ui.components.formatHoursField
@@ -78,6 +79,11 @@ fun EntryScreen(
     var showAddChangeSheet by remember { mutableStateOf(false) }
     var pendingTypedHours by remember { mutableStateOf<Double?>(null) }
     var pickerField by remember { mutableStateOf<ClockField?>(null) }
+    // S4: one modal — suspend sheet while TimePicker is open
+    var sheetSuspendedForPicker by remember { mutableStateOf(false) }
+    var sheetDraftHoursText by remember { mutableStateOf("") }
+    var sheetDraftNote by remember { mutableStateOf("") }
+    var sheetDraftNoLunch by remember { mutableStateOf(false) }
     var pendingZeroField by remember { mutableStateOf<ClockField?>(null) }
     var pendingZeroMinutes by remember { mutableStateOf<Int?>(null) }
     var zeroReasonText by remember { mutableStateOf("") }
@@ -212,6 +218,24 @@ fun EntryScreen(
         }
     }
 
+    fun restoreSheetAfterPicker() {
+        if (sheetSuspendedForPicker) {
+            sheetSuspendedForPicker = false
+            showAddChangeSheet = true
+        }
+    }
+
+    fun suspendSheetForPicker(draft: AddChangeHoursDraft, field: ClockField) {
+        sheetDraftHoursText = draft.hoursText
+        sheetDraftNote = draft.note
+        sheetDraftNoLunch = draft.noLunchTaken
+        comments = draft.note
+        noLunchTaken = draft.noLunchTaken
+        showAddChangeSheet = false
+        sheetSuspendedForPicker = true
+        pickerField = field
+    }
+
     fun onEntryTimePicked(field: ClockField, minutes: Int) {
         if (ZeroTimeNote.needsReason(minutes)) {
             pendingZeroField = field
@@ -221,6 +245,7 @@ fun EntryScreen(
         } else {
             applyEntryClockMinutes(field, minutes)
             pickerField = null
+            restoreSheetAfterPicker()
         }
     }
 
@@ -246,7 +271,7 @@ fun EntryScreen(
             ).show()
         } else if (ZeroTimeNote.needsZeroHoursReason(
                 start, end, typed ?: worked?.hours, typedHours = typed
-            )
+            ) && !ZeroTimeNote.hasZeroHoursReason(comments)
         ) {
             zeroHoursReasonText = ""
             showZeroHoursDialog = true
@@ -566,7 +591,15 @@ fun EntryScreen(
                     val hasHours = persistedHours != null ||
                         (clockInMinutes != null && clockOutMinutes != null)
                     TextButton(
-                        onClick = { showAddChangeSheet = true },
+                        onClick = {
+                            sheetDraftHoursText = formatHoursField(
+                                persistedHours ?: worked?.hours
+                            )
+                            sheetDraftNote = comments
+                            sheetDraftNoLunch = noLunchTaken
+                            sheetSuspendedForPicker = false
+                            showAddChangeSheet = true
+                        },
                         enabled = !clockBusy,
                         modifier = Modifier
                             .heightIn(min = 48.dp)
@@ -585,7 +618,10 @@ fun EntryScreen(
                             worked == null ->
                                 "Set clock in and clock out. Break/lunch is optional and unpaid by default."
                             worked.hours == 0.0 ->
-                                ZeroTimeNote.ZERO_HOURS_SAVE_CAPTION
+                                if (ZeroTimeNote.hasZeroHoursReason(comments))
+                                    ZeroTimeNote.ZERO_HOURS_REASON_PRESENT_CAPTION
+                                else
+                                    ZeroTimeNote.ZERO_HOURS_SAVE_CAPTION
                             worked.lunchApplied && worked.overnight ->
                                 "Overnight shift minus break. Rounded to hundredths."
                             worked.lunchApplied ->
@@ -657,7 +693,10 @@ fun EntryScreen(
             field = field,
             currentMinutes = minutesFor(field, clockInMinutes, lunchOutMinutes, lunchInMinutes, clockOutMinutes),
             onConfirm = { minutes -> onEntryTimePicked(field, minutes) },
-            onDismiss = { pickerField = null }
+            onDismiss = {
+                pickerField = null
+                restoreSheetAfterPicker()
+            }
         )
     }
 
@@ -671,6 +710,7 @@ fun EntryScreen(
                 pendingZeroField = null
                 pendingZeroMinutes = null
                 zeroReasonText = ""
+                restoreSheetAfterPicker()
             },
             title = { Text(ZeroTimeNote.DIALOG_TITLE) },
             text = {
@@ -703,6 +743,7 @@ fun EntryScreen(
                         pendingZeroMinutes = null
                         zeroReasonText = ""
                         applyEntryClockMinutes(field, minutes, reason)
+                        restoreSheetAfterPicker()
                     },
                     enabled = canConfirm,
                     modifier = Modifier.semantics {
@@ -716,6 +757,7 @@ fun EntryScreen(
                         pendingZeroField = null
                         pendingZeroMinutes = null
                         zeroReasonText = ""
+                        restoreSheetAfterPicker()
                     },
                     modifier = Modifier.semantics {
                         contentDescription = ZeroTimeNote.DISMISS_LABEL
@@ -849,19 +891,20 @@ fun EntryScreen(
         AddChangeHoursSheet(
             title = if (persistedHours != null || (clockInMinutes != null && clockOutMinutes != null))
                 "Change hours" else "Add hours",
-            initialHours = formatHoursField(
-                persistedHours ?: worked?.hours
-            ),
+            initialHours = sheetDraftHoursText,
             initialClockIn = clockInMinutes,
             initialClockOut = clockOutMinutes,
-            initialNote = comments,
-            initialNoLunchTaken = noLunchTaken,
+            initialNote = sheetDraftNote,
+            initialNoLunchTaken = sheetDraftNoLunch,
             clockInMinutes = clockInMinutes,
             clockOutMinutes = clockOutMinutes,
-            onDismiss = { showAddChangeSheet = false },
+            onDismiss = {
+                showAddChangeSheet = false
+                sheetSuspendedForPicker = false
+            },
             onSave = { onAddChangeSave(it) },
-            onPickClockIn = { pickerField = ClockField.IN },
-            onPickClockOut = { pickerField = ClockField.OUT }
+            onPickClockIn = { draft -> suspendSheetForPicker(draft, ClockField.IN) },
+            onPickClockOut = { draft -> suspendSheetForPicker(draft, ClockField.OUT) }
         )
     }
 

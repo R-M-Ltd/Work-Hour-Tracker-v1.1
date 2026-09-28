@@ -32,6 +32,22 @@ sealed class HomeDraftRestoreDecision {
     data class Apply(val snapshot: HomeDraftSnapshot) : HomeDraftRestoreDecision()
 }
 
+/**
+ * Result of narrowing D4 for comments-only History/Log saves (1.3.39 S1).
+ * Preserves dirty IN/OUT stash; full-clear only when clocks are not dirty.
+ */
+sealed class CommentsOnlyReconcileDecision {
+    /** No stash, or stash for a different day — leave prefs alone. */
+    data object NoOp : CommentsOnlyReconcileDecision()
+
+    /** Clocks match Room (or empty) — full clear (D4: no false restore toast). */
+    data object Clear : CommentsOnlyReconcileDecision()
+
+    /** Dirty IN/OUT vs Room — keep clocks; refresh stash comments to match Room. */
+    data class KeepClocksUpdateComments(val snapshot: HomeDraftSnapshot) : CommentsOnlyReconcileDecision()
+}
+
+
 object HomeDraftStash {
 
     /**
@@ -125,5 +141,30 @@ object HomeDraftStash {
         }
 
         return HomeDraftRestoreDecision.None
+    }
+
+    /**
+     * S1: after successful comments-only Room write, decide stash reconcile.
+     * Dirty IN/OUT vs [roomIn]/[roomOut] → keep clocks, update comments.
+     * Otherwise full clear (preserves D4 no-false-toast when clocks clean).
+     */
+    fun decideCommentsOnlyReconcile(
+        stash: HomeDraftSnapshot?,
+        epochDay: Long,
+        newComments: String,
+        roomIn: Int?,
+        roomOut: Int?
+    ): CommentsOnlyReconcileDecision {
+        if (stash == null) return CommentsOnlyReconcileDecision.NoOp
+        if (stash.epochDay != epochDay) return CommentsOnlyReconcileDecision.NoOp
+        val clocksDirty =
+            stash.inMinutes != roomIn || stash.outMinutes != roomOut
+        return if (clocksDirty) {
+            CommentsOnlyReconcileDecision.KeepClocksUpdateComments(
+                stash.copy(comments = newComments)
+            )
+        } else {
+            CommentsOnlyReconcileDecision.Clear
+        }
     }
 }

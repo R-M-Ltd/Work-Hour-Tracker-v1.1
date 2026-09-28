@@ -29,6 +29,9 @@ object ZeroTimeNote {
     /** Optional honesty caption when preview hours are 0.00 with both clocks set. */
     const val ZERO_HOURS_SAVE_CAPTION = "0.00h — Save will ask for a short reason"
 
+    /** When a zero-hours reason line is already on the note — no re-prompt. */
+    const val ZERO_HOURS_REASON_PRESENT_CAPTION = "0.00h — reason already on note"
+
     /** True when [minutes] is exactly midnight (0 minutes from midnight). */
     fun needsReason(minutes: Int?): Boolean = minutes != null && minutes == 0
 
@@ -136,4 +139,11 @@ object ZeroTimeNote {
         if (clockInMinutes == clockOutMinutes) return true
         return hoursWorked != null && hoursWorked == 0.0
     }
+
+    /**
+     * S3: true when any newline-delimited trimmed line starts with "0 hours:".
+     * Used to skip re-prompting "Reason for 0 hours?" when a reason is already present.
+     */
+    fun hasZeroHoursReason(note: String): Boolean =
+        note.lineSequence().any { it.trim().startsWith("0 hours:") }
 }

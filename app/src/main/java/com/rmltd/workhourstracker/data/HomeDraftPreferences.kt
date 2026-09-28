@@ -2,7 +2,9 @@ package com.rmltd.workhourstracker.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.rmltd.workhourstracker.util.CommentsOnlyReconcileDecision
 import com.rmltd.workhourstracker.util.HomeDraftSnapshot
+import com.rmltd.workhourstracker.util.HomeDraftStash
 
 /**
  * Durable Home draft stash (S-B) — survives process death.
@@ -66,5 +68,31 @@ object HomeDraftPreferences {
     fun clearIfEpochDay(context: Context, todayEpochDay: Long) {
         val stash = load(context) ?: return
         if (stash.epochDay == todayEpochDay) clear(context)
+    }
+
+    /**
+     * S1: comments-only History/Log save — preserve dirty IN/OUT; clear when clocks clean.
+     * [roomClockIn]/[roomClockOut] are Room minutes for [epochDay] (post-write clocks unchanged).
+     */
+    fun reconcileCommentsOnly(
+        context: Context,
+        epochDay: Long,
+        newComments: String,
+        roomClockIn: Int?,
+        roomClockOut: Int?
+    ) {
+        when (
+            val decision = HomeDraftStash.decideCommentsOnlyReconcile(
+                stash = load(context),
+                epochDay = epochDay,
+                newComments = newComments,
+                roomIn = roomClockIn,
+                roomOut = roomClockOut
+            )
+        ) {
+            CommentsOnlyReconcileDecision.NoOp -> Unit
+            CommentsOnlyReconcileDecision.Clear -> clearIfEpochDay(context, epochDay)
+            is CommentsOnlyReconcileDecision.KeepClocksUpdateComments -> save(context, decision.snapshot)
+        }
     }
 }

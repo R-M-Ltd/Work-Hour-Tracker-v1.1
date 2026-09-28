@@ -1,5 +1,6 @@
 package com.rmltd.workhourstracker.ui.screens
 
+import android.app.Activity
 import android.os.Build
 import android.Manifest
 import android.content.pm.PackageManager
@@ -61,6 +62,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import com.rmltd.workhourstracker.data.SaveEntryResult
+import com.rmltd.workhourstracker.ui.components.AddChangeHoursDraft
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursResult
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursSheet
 import com.rmltd.workhourstracker.ui.components.formatHoursField
@@ -142,6 +144,9 @@ fun SettingsScreen(
     var sheetNote by remember { mutableStateOf("") }
     var sheetNoLunch by remember { mutableStateOf(false) }
     var sheetPickerField by remember { mutableStateOf<SettingsTodayClockField?>(null) }
+    // S4: suspend Set-today sheet while TimePicker alone
+    var sheetSuspendedForPicker by remember { mutableStateOf(false) }
+    var sheetDraftHoursText by remember { mutableStateOf("") }
     var showSheetZeroDialog by remember { mutableStateOf(false) }
     var sheetZeroReason by remember { mutableStateOf("") }
     var pendingSheetTyped by remember { mutableStateOf<Double?>(null) }
@@ -209,6 +214,18 @@ fun SettingsScreen(
         ActivityResultContracts.RequestPermission()
     ) {
         notificationsAllowed = ReminderScheduler.areNotificationsEnabled(context)
+    }
+    // Optional 1.3.39: stamp Last backed up only when share chooser returns RESULT_OK
+    val backupShareLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val now = System.currentTimeMillis()
+            BackupPreferences.setLastBackupEpochMillis(context, now)
+            lastBackupEpoch = now
+            Toast.makeText(context, "Backup ready to share", Toast.LENGTH_SHORT).show()
+        }
+        backupBusy = false
     }
     val restorePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -1110,20 +1127,17 @@ fun SettingsScreen(
                                     }
                                     val json = viewModel.buildBackupJson(version)
                                     val intent = BackupShare.shareBackup(context, json)
-                                    context.startActivity(
+                                    backupShareLauncher.launch(
                                         Intent.createChooser(intent, "Share work hours backup")
                                     )
-                                    val now = System.currentTimeMillis()
-                                    BackupPreferences.setLastBackupEpochMillis(context, now)
-                                    lastBackupEpoch = now
-                                    Toast.makeText(context, "Backup ready to share", Toast.LENGTH_SHORT).show()
+                                    // Stamp deferred to RESULT_OK (best-effort; some OEMs OK on cancel).
+                                    backupBusy = false
                                 } catch (e: Exception) {
                                     Toast.makeText(
                                         context,
                                         "Backup failed: ${e.message}",
                                         Toast.LENGTH_LONG
                                     ).show()
-                                } finally {
                                     backupBusy = false
                                 }
                             }
@@ -1174,6 +1188,11 @@ fun SettingsScreen(
                             sheetClockOut = todayEntry?.clockOutMinutes
                             sheetNote = todayEntry?.comments.orEmpty()
                             sheetNoLunch = todayEntry?.noLunchTaken == true
+                            sheetDraftHoursText = when {
+                                hasHours -> formatHoursField(todayEntry!!.hoursWorked)
+                                else -> ""
+                            }
+                            sheetSuspendedForPicker = false
                             showSetTodaysSheet = true
                             onSetTodaysTimes() // no-op from nav (sheet hosted here)
                         },
@@ -1285,7 +1304,7 @@ fun SettingsScreen(
                                 "Last synced: " + DateFormat.getDateTimeInstance(
                                     DateFormat.SHORT, DateFormat.SHORT
                                 ).format(Date(cloudLastSync))
-                            } else "Not synced yet"
+                            } else CloudSyncPreferences.NOT_SYNCED_YET
                             Text(lastLabel, style = MaterialTheme.typography.bodyMedium)
                         } else {
                             Text(
@@ -1846,6 +1865,22 @@ fun SettingsScreen(
         }
     }
 
+    fun restoreSheetAfterPicker() {
+        if (sheetSuspendedForPicker) {
+            sheetSuspendedForPicker = false
+            showSetTodaysSheet = true
+        }
+    }
+
+    fun suspendSheetForPicker(draft: AddChangeHoursDraft, field: SettingsTodayClockField) {
+        sheetDraftHoursText = draft.hoursText
+        sheetNote = draft.note
+        sheetNoLunch = draft.noLunchTaken
+        showSetTodaysSheet = false
+        sheetSuspendedForPicker = true
+        sheetPickerField = field
+    }
+
     fun onSettingsAddChangeSave(result: AddChangeHoursResult) {
         sheetClockIn = result.clockInMinutes
         sheetClockOut = result.clockOutMinutes
@@ -1856,7 +1891,7 @@ fun SettingsScreen(
                 result.clockOutMinutes,
                 result.typedHours,
                 typedHours = result.typedHours
-            )
+            ) && !ZeroTimeNote.hasZeroHoursReason(result.note)
         ) {
             pendingSheetTyped = result.typedHours
             pendingSheetNoLunch = result.noLunchTaken
@@ -1895,24 +1930,22 @@ fun SettingsScreen(
     }
 
     if (showSetTodaysSheet) {
-        val seedHours = when {
-            todayEntry?.hasPersistedHours() == true ->
-                formatHoursField(todayEntry!!.hoursWorked)
-            else -> ""
-        }
         AddChangeHoursSheet(
             title = setTodaysTitle,
-            initialHours = seedHours,
+            initialHours = sheetDraftHoursText,
             initialClockIn = sheetClockIn,
             initialClockOut = sheetClockOut,
             initialNote = sheetNote,
             initialNoLunchTaken = sheetNoLunch,
             clockInMinutes = sheetClockIn,
             clockOutMinutes = sheetClockOut,
-            onDismiss = { showSetTodaysSheet = false },
+            onDismiss = {
+                showSetTodaysSheet = false
+                sheetSuspendedForPicker = false
+            },
             onSave = { onSettingsAddChangeSave(it) },
-            onPickClockIn = { sheetPickerField = SettingsTodayClockField.IN },
-            onPickClockOut = { sheetPickerField = SettingsTodayClockField.OUT }
+            onPickClockIn = { draft -> suspendSheetForPicker(draft, SettingsTodayClockField.IN) },
+            onPickClockOut = { draft -> suspendSheetForPicker(draft, SettingsTodayClockField.OUT) }
         )
     }
 
@@ -1924,8 +1957,12 @@ fun SettingsScreen(
                 if (field == SettingsTodayClockField.IN) sheetClockIn = mins
                 else sheetClockOut = mins
                 sheetPickerField = null
+                restoreSheetAfterPicker()
             },
-            onDismiss = { sheetPickerField = null }
+            onDismiss = {
+                sheetPickerField = null
+                restoreSheetAfterPicker()
+            }
         )
     }
 

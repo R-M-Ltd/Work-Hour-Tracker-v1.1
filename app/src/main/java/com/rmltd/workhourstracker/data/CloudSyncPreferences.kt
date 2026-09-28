@@ -52,6 +52,8 @@ object CloudSyncPreferences {
     const val AUTH_CODE_EDUCATION =
         "You'll approve access in your browser. We use a secure sign-in so sync can refresh without asking every time."
     const val SIGNING_IN = "Opening your cloud account…"
+    /** Linked but never successfully synced (S5 clarity). */
+    const val NOT_SYNCED_YET = "Not synced yet — tap Sync now"
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

@@ -30,6 +30,7 @@ import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.HomeDraftPreferences
 import com.rmltd.workhourstracker.data.UpdateOpenClockInResult
 import com.rmltd.workhourstracker.data.SaveEntryResult
+import com.rmltd.workhourstracker.ui.components.AddChangeHoursDraft
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursResult
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursSheet
 import com.rmltd.workhourstracker.ui.components.formatHoursField
@@ -96,6 +97,10 @@ fun HomeScreen(
     var pendingTypedHours by remember { mutableStateOf<Double?>(null) }
     var pendingNoLunch by remember { mutableStateOf(false) }
     var sheetNoLunch by remember { mutableStateOf(false) }
+    // S4: suspend Add/Change sheet while TimePicker is alone; restore after OK/Cancel
+    var sheetSuspendedForPicker by remember { mutableStateOf(false) }
+    var sheetDraftHoursText by remember { mutableStateOf("") }
+    var sheetDraftNote by remember { mutableStateOf("") }
     // Live tick for open-punch elapsed total
     var nowEpochMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -294,7 +299,7 @@ fun HomeScreen(
                 result.clockOutMinutes,
                 result.typedHours,
                 typedHours = result.typedHours
-            )
+            ) && !ZeroTimeNote.hasZeroHoursReason(result.note)
         ) {
             pendingTypedHours = result.typedHours
             pendingNoLunch = result.noLunchTaken
@@ -424,15 +429,34 @@ fun HomeScreen(
         }
     }
 
+    fun restoreSheetAfterPicker() {
+        if (sheetSuspendedForPicker) {
+            sheetSuspendedForPicker = false
+            showAddChangeSheet = true
+        }
+    }
+
+    fun suspendSheetForPicker(draft: AddChangeHoursDraft, field: HomeClockField) {
+        sheetDraftHoursText = draft.hoursText
+        sheetDraftNote = draft.note
+        sheetNoLunch = draft.noLunchTaken
+        homeCommentsDraft = draft.note
+        showAddChangeSheet = false
+        sheetSuspendedForPicker = true
+        homePickerField = field
+    }
+
     fun onHomeTimePicked(field: HomeClockField, minutes: Int) {
         if (ZeroTimeNote.needsReason(minutes)) {
             pendingZeroField = field
             pendingZeroMinutes = minutes
             zeroReasonText = ""
             homePickerField = null
+            // Keep sheet suspended until midnight reason dialog finishes
         } else {
             applyHomeClockMinutes(field, minutes)
             homePickerField = null
+            restoreSheetAfterPicker()
         }
     }
 
@@ -471,6 +495,14 @@ fun HomeScreen(
                             onClick = {
                                 showOverflow = false
                                 addChangeTitle = "Set today's times"
+                                sheetDraftHoursText = when {
+                                    todayEntry?.hasPersistedHours() == true ->
+                                        formatHoursField(todayEntry!!.hoursWorked)
+                                    else -> ""
+                                }
+                                sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
+                                sheetNoLunch = todayEntry?.noLunchTaken == true
+                                sheetSuspendedForPicker = false
                                 showAddChangeSheet = true
                             }
                         )
@@ -648,6 +680,14 @@ fun HomeScreen(
                             TextButton(
                                 onClick = {
                                     addChangeTitle = if (hasHours) "Change hours" else "Add hours"
+                                    sheetDraftHoursText = when {
+                                        todayEntry?.hasPersistedHours() == true ->
+                                            formatHoursField(todayEntry!!.hoursWorked)
+                                        else -> ""
+                                    }
+                                    sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
+                                    sheetNoLunch = todayEntry?.noLunchTaken == true || sheetNoLunch
+                                    sheetSuspendedForPicker = false
                                     sheetNoLunch = todayEntry?.noLunchTaken ?: false
                                     showAddChangeSheet = true
                                 },
@@ -1016,7 +1056,10 @@ fun HomeScreen(
                 HomeClockField.OUT -> homeOutMinutes
             },
             onConfirm = { minutes -> onHomeTimePicked(field, minutes) },
-            onDismiss = { homePickerField = null }
+            onDismiss = {
+                homePickerField = null
+                restoreSheetAfterPicker()
+            }
         )
     }
 
@@ -1033,6 +1076,7 @@ fun HomeScreen(
                 pendingZeroField = null
                 pendingZeroMinutes = null
                 zeroReasonText = ""
+                restoreSheetAfterPicker()
             },
             title = { Text(ZeroTimeNote.DIALOG_TITLE) },
             text = {
@@ -1066,6 +1110,7 @@ fun HomeScreen(
                         pendingZeroMinutes = null
                         zeroReasonText = ""
                         applyHomeClockMinutes(field, minutes, reason)
+                        restoreSheetAfterPicker()
                     },
                     enabled = canConfirm,
                     modifier = Modifier.semantics {
@@ -1079,6 +1124,7 @@ fun HomeScreen(
                         pendingZeroField = null
                         pendingZeroMinutes = null
                         zeroReasonText = ""
+                        restoreSheetAfterPicker()
                     },
                     modifier = Modifier.semantics {
                         contentDescription = ZeroTimeNote.DISMISS_LABEL
@@ -1295,24 +1341,24 @@ fun HomeScreen(
         )
     }
     if (showAddChangeSheet) {
-        val seedHours = when {
-            todayEntry?.hasPersistedHours() == true ->
-                formatHoursField(todayEntry!!.hoursWorked)
-            else -> ""
-        }
         AddChangeHoursSheet(
             title = addChangeTitle,
-            initialHours = seedHours,
+            initialHours = sheetDraftHoursText,
             initialClockIn = homeInMinutes ?: todayEntry?.clockInMinutes,
             initialClockOut = homeOutMinutes ?: todayEntry?.clockOutMinutes,
-            initialNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() },
+            initialNote = sheetDraftNote.ifBlank {
+                homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
+            },
             initialNoLunchTaken = sheetNoLunch,
             clockInMinutes = homeInMinutes,
             clockOutMinutes = homeOutMinutes,
-            onDismiss = { showAddChangeSheet = false },
+            onDismiss = {
+                showAddChangeSheet = false
+                sheetSuspendedForPicker = false
+            },
             onSave = { onAddChangeSave(it) },
-            onPickClockIn = { homePickerField = HomeClockField.IN },
-            onPickClockOut = { homePickerField = HomeClockField.OUT }
+            onPickClockIn = { draft -> suspendSheetForPicker(draft, HomeClockField.IN) },
+            onPickClockOut = { draft -> suspendSheetForPicker(draft, HomeClockField.OUT) }
         )
     }
 
