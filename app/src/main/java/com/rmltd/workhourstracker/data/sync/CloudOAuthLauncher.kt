@@ -34,12 +34,6 @@ object CloudOAuthLauncher {
         return Intent(Intent.ACTION_VIEW, Uri.parse(url))
     }
 
-    /** @deprecated Prefer [authorizeIntent] with Context so PKCE is stored. */
-    fun authorizeIntent(provider: CloudSyncPreferences.Provider): Intent? {
-        val url = authorizeUrl(provider, challenge = null) ?: return null
-        return Intent(Intent.ACTION_VIEW, Uri.parse(url))
-    }
-
     fun authorizeUrl(
         provider: CloudSyncPreferences.Provider,
         challenge: String? = null
