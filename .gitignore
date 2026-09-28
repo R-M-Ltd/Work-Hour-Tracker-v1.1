@@ -8,3 +8,8 @@
 .externalNativeBuild
 .cxx
 app/build/
+
+# Never commit signing material (prefer secrets outside this repo)
+*.jks
+*.keystore
+secrets/

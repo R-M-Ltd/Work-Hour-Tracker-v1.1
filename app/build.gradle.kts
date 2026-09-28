@@ -49,6 +49,37 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+
+    // Release signing from local.properties (gitignored). Absent props => unsigned release / CI-safe.
+    val releaseStoreFile = localProperties.getProperty("RELEASE_STORE_FILE")
+    val releaseStorePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
+    val releaseKeyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
+    val releaseKeyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+    val hasReleaseSigning =
+        !releaseStoreFile.isNullOrBlank() &&
+            !releaseStorePassword.isNullOrBlank() &&
+            !releaseKeyAlias.isNullOrBlank() &&
+            !releaseKeyPassword.isNullOrBlank()
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
 }
 
 dependencies {
