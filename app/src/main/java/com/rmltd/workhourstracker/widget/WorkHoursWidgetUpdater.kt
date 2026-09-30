@@ -14,8 +14,10 @@ import com.rmltd.workhourstracker.R
 import com.rmltd.workhourstracker.WorkHoursApplication
 import com.rmltd.workhourstracker.data.ClockDayState
 import com.rmltd.workhourstracker.data.ReminderPreferences
+import com.rmltd.workhourstracker.data.SessionPausePreferences
 import com.rmltd.workhourstracker.data.ThemePreferences
 import com.rmltd.workhourstracker.util.SessionElapsed
+import com.rmltd.workhourstracker.util.SessionPause
 import com.rmltd.workhourstracker.util.WeekUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -195,7 +197,13 @@ object WorkHoursWidgetUpdater {
         val weekStart = WeekUtils.weekStartFor(today, weekStartDay)
         val weekEntries = repo?.entriesForWeekOnce(weekStart).orEmpty()
         val nowM = LocalTime.now().hour * 60 + LocalTime.now().minute
-        val weekHours = SessionElapsed.weekActualHours(weekEntries, today.toEpochDay(), nowM)
+        val paused = SessionPausePreferences.isPaused(context, today.toEpochDay())
+        val freezeMs = SessionPausePreferences.freezeEpochMillis(context, today.toEpochDay())
+        val pauseFreezeMinutes: Int? =
+            if (paused) SessionPause.effectiveNowMinutes(nowM, freezeMs, today) else null
+        val weekHours = SessionElapsed.weekActualHours(
+            weekEntries, today.toEpochDay(), nowM, pauseFreezeMinutes
+        )
         val goal = ReminderPreferences.getWeeklyGoalHours(context)
         return WidgetContent.build(
             todayIn = todayEntry?.clockInMinutes,
@@ -205,7 +213,9 @@ object WorkHoursWidgetUpdater {
             weekHours = weekHours,
             weekGoalHours = goal,
             todayEntry = todayEntry,
-            nowMinutes = nowM
+            nowMinutes = nowM,
+            pauseFreezeMinutes = pauseFreezeMinutes,
+            sessionPaused = paused
         )
     }
 

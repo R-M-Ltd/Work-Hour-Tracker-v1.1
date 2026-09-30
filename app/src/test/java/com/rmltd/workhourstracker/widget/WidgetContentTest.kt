@@ -142,4 +142,41 @@ class WidgetContentTest {
         assertEquals("Today: 1.50h", d.todayLine)
         assertEquals("Week 1.50h / 40.00h", d.weekLine)
     }
+
+    @Test
+    fun paused_open_freezesTodayAndShowsPausedStatus() {
+        val d = WidgetContent.build(
+            todayIn = nineAm,
+            todayOut = null,
+            todayHoursWorked = 0.0,
+            overnightPending = false,
+            weekHours = 3.0,
+            weekGoalHours = 40.0,
+            nowMinutes = fivePm, // live would be 8h
+            pauseFreezeMinutes = noon, // freeze at 3h
+            sessionPaused = true
+        )
+        assertTrue(d.statusLine.startsWith("Paused · since"))
+        assertTrue(d.statusLine.contains("9:00"))
+        assertEquals("Today: 3.00h", d.todayLine)
+        assertTrue(d.openSession) // pause must not close OPEN
+    }
+
+    @Test
+    fun paused_false_withFreezeMinutes_stillClockedInCopy() {
+        val d = WidgetContent.build(
+            todayIn = nineAm,
+            todayOut = null,
+            todayHoursWorked = 0.0,
+            overnightPending = false,
+            weekHours = 0.0,
+            weekGoalHours = 40.0,
+            nowMinutes = fivePm,
+            pauseFreezeMinutes = noon,
+            sessionPaused = false
+        )
+        assertTrue(d.statusLine.startsWith("Clocked in since"))
+        assertEquals("Today: 3.00h", d.todayLine)
+        assertTrue(d.openSession)
+    }
 }

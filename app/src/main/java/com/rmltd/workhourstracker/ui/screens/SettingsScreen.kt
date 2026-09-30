@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import com.rmltd.workhourstracker.ui.navigation.SettingsSection
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -80,7 +83,8 @@ fun SettingsScreen(
     viewModel: WorkHoursViewModel,
     onBack: () -> Unit,
     onSetTodaysTimes: () -> Unit = {},
-    onLogLunch: () -> Unit = {}
+    onLogLunch: () -> Unit = {},
+    initialSection: SettingsSection? = null
 ) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(ReminderPreferences.isReminderEnabled(context)) }
@@ -250,6 +254,15 @@ fun SettingsScreen(
 
     val weekEndDay = WeekUtils.weekEndDayName(weekStartDay)
     val sectionShape = RoundedCornerShape(18.dp)
+    val scrollState = rememberScrollState()
+    val sectionOffsets = remember { mutableStateMapOf<SettingsSection, Int>() }
+
+    LaunchedEffect(initialSection, sectionOffsets.toMap()) {
+        val section = initialSection ?: return@LaunchedEffect
+        val offset = sectionOffsets[section] ?: return@LaunchedEffect
+        scrollState.animateScrollTo(offset.coerceAtLeast(0))
+    }
+
 
     Scaffold(
         topBar = {
@@ -267,7 +280,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -333,7 +346,12 @@ fun SettingsScreen(
             }
 
             ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coords ->
+                        sectionOffsets[SettingsSection.RATES_GOALS] =
+                            coords.positionInParent().y.toInt()
+                    },
                 shape = sectionShape,
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
             ) {
@@ -347,7 +365,7 @@ fun SettingsScreen(
                         value = goalText,
                         onValueChange = { goalText = it.filter { ch -> ch.isDigit() || ch == '.' } },
                         label = { Text("Hours per week") },
-                        supportingText = { Text("Shown as a progress ring on Home. Default 40.00.") },
+                        supportingText = { Text("Week target for Home / widget totals. Default 40.00.") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -433,7 +451,12 @@ fun SettingsScreen(
             }
 
             ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coords ->
+                        sectionOffsets[SettingsSection.REMINDERS_SHADE] =
+                            coords.positionInParent().y.toInt()
+                    },
                 shape = sectionShape,
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
             ) {
@@ -661,7 +684,12 @@ fun SettingsScreen(
             }
 
             ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coords ->
+                        sectionOffsets[SettingsSection.APPEARANCE] =
+                            coords.positionInParent().y.toInt()
+                    },
                 shape = sectionShape,
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
             ) {
@@ -843,7 +871,12 @@ fun SettingsScreen(
             }
 
             ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coords ->
+                        sectionOffsets[SettingsSection.EXPORT] =
+                            coords.positionInParent().y.toInt()
+                    },
                 shape = sectionShape,
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
             ) {
@@ -1074,7 +1107,12 @@ fun SettingsScreen(
             }
 
             ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coords ->
+                        sectionOffsets[SettingsSection.BACKUP_CLOUD] =
+                            coords.positionInParent().y.toInt()
+                    },
                 shape = sectionShape,
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
             ) {

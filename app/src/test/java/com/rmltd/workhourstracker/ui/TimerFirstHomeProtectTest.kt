@@ -6,7 +6,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Source-level protect tests for 1.3.40 timer-first Home (placement only).
+ * Source-level protect tests for timer-first Home + 1.3.41 lows (placement only).
  */
 class TimerFirstHomeProtectTest {
 
@@ -84,12 +84,58 @@ class TimerFirstHomeProtectTest {
     }
 
     @Test
-    fun versionIs1340Vc42() {
+    fun versionIs1341Vc43() {
         val gradle = listOf(
             File("build.gradle.kts"),
             File("app/build.gradle.kts")
         ).first { it.exists() }.readText()
-        assertTrue(gradle.contains("versionName = \"1.3.40\""))
-        assertTrue(gradle.contains("versionCode = 42"))
+        assertTrue(gradle.contains("versionName = \"1.3.41\""))
+        assertTrue(gradle.contains("versionCode = 43"))
+    }
+
+    @Test
+    fun homeDayRowRemoved() {
+        val home = read("ui/screens/HomeScreen.kt")
+        assertFalse(home.contains("private fun DayRow"))
+        assertFalse(home.contains("fun DayRow"))
+        assertFalse(home.contains("foundation.lazy.LazyColumn"))
+        assertFalse(home.contains("foundation.lazy.items"))
+    }
+
+    @Test
+    fun moreSettingsDeepLinksWired() {
+        val nav = read("ui/navigation/AppNavigation.kt")
+        assertTrue(nav.contains("openSettingsFromMore(SettingsSection.EXPORT)"))
+        assertTrue(nav.contains("openSettingsFromMore(SettingsSection.RATES_GOALS)"))
+        assertTrue(nav.contains("openSettingsFromMore(SettingsSection.APPEARANCE)"))
+        assertTrue(nav.contains("openSettingsFromMore(SettingsSection.BACKUP_CLOUD)"))
+        assertTrue(nav.contains("openSettingsFromMore(SettingsSection.REMINDERS_SHADE)"))
+        assertTrue(nav.contains("openSettingsFromMore(null)"))
+        assertTrue(nav.contains("initialSection = initialSection"))
+        val settings = read("ui/screens/SettingsScreen.kt")
+        assertTrue(settings.contains("initialSection: SettingsSection?"))
+        assertTrue(settings.contains("SettingsSection.EXPORT"))
+        assertTrue(settings.contains("animateScrollTo"))
+    }
+
+    @Test
+    fun widgetPauseFreezeWired() {
+        val updater = read("widget/WorkHoursWidgetUpdater.kt")
+        assertTrue(updater.contains("SessionPausePreferences.isPaused"))
+        assertTrue(updater.contains("pauseFreezeMinutes"))
+        assertTrue(updater.contains("SessionPause.effectiveNowMinutes"))
+        val content = read("widget/WidgetContent.kt")
+        assertTrue(content.contains("pauseFreezeMinutes: Int? = null"))
+        assertTrue(content.contains("sessionPaused: Boolean = false"))
+        assertTrue(content.contains("Paused · since"))
+        assertTrue(content.contains("todayDisplayHours(entry, nowMinutes, pauseFreezeMinutes)"))
+    }
+
+    @Test
+    fun shadeClockOutClearsPausePrefs() {
+        val rx = read("receiver/ClockSessionActionReceiver.kt")
+        assertTrue(rx.contains("SessionPausePreferences.clear(context)"))
+        val success = rx.substringAfter("ClockOutResult.SUCCESS").substringBefore("ClockOutResult.FAILED")
+        assertTrue(success.contains("SessionPausePreferences.clear"))
     }
 }

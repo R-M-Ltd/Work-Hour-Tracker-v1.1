@@ -44,12 +44,16 @@ object WidgetContent {
         weekHours: Double,
         weekGoalHours: Double,
         todayEntry: DailyEntry? = null,
-        nowMinutes: Int = java.time.LocalTime.now().hour * 60 + java.time.LocalTime.now().minute
+        nowMinutes: Int = java.time.LocalTime.now().hour * 60 + java.time.LocalTime.now().minute,
+        pauseFreezeMinutes: Int? = null,
+        sessionPaused: Boolean = false
     ): Display {
         val kind = ClockDayState.classify(todayIn, todayOut, todayHoursWorked)
         val status = when {
             overnightPending && kind == ClockDayState.Kind.EMPTY ->
                 OVERNIGHT_OPEN_STATUS
+            kind == ClockDayState.Kind.OPEN && todayIn != null && sessionPaused ->
+                "Paused · since ${HoursCalc.formatClock(todayIn)}"
             kind == ClockDayState.Kind.OPEN && todayIn != null ->
                 "Clocked in since ${HoursCalc.formatClock(todayIn)}"
             kind == ClockDayState.Kind.CLOSED -> {
@@ -74,7 +78,7 @@ object WidgetContent {
                 clockOutMinutes = todayOut
             )
         } else null
-        val todayHours = SessionElapsed.todayDisplayHours(entry, nowMinutes)
+        val todayHours = SessionElapsed.todayDisplayHours(entry, nowMinutes, pauseFreezeMinutes)
         val todayLine = todayHours?.let { "Today: ${HoursCalc.formatHours(it)}" }
         val week =
             "Week ${HoursCalc.formatHours(weekHours)} / ${HoursCalc.formatHours(weekGoalHours)}"

@@ -3,8 +3,6 @@ package com.rmltd.workhourstracker.ui.screens
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -1377,93 +1375,6 @@ private fun HomeClockPickerDialog(
             }
         }
     )
-}
-
-@Composable
-private fun DayRow(
-    date: LocalDate,
-    hours: Double?,
-    clockLabel: String?,
-    hasEntry: Boolean,
-    comments: String?,
-    isToday: Boolean,
-    onClick: () -> Unit
-) {
-    val shape = RoundedCornerShape(16.dp)
-    OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = shape,
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = if (isToday) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface
-        ),
-        border = BorderStroke(
-            width = if (isToday) 1.5.dp else 1.dp,
-            color = if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-            else MaterialTheme.colorScheme.outlineVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()) +
-                        if (isToday) "  •  Today" else "",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface
-                )
-                if (clockLabel != null) {
-                    Text(
-                        clockLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-                if (!comments.isNullOrBlank()) {
-                    Text(
-                        comments,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-            }
-            val dayName = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
-            val actionLabel = when {
-                // Include 0.00h closed days (equal in/out zero day, 1.3.33)
-                hours != null -> formatHours(hours)
-                hasEntry -> "Edit"
-                else -> "Add"
-            }
-            val actionCd = when {
-                hours != null ->
-                    "${formatHours(hours)} hours, edit $dayName"
-                hasEntry -> "Edit $dayName"
-                else -> "Add hours for $dayName"
-            }
-            TextButton(
-                onClick = onClick,
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .semantics { contentDescription = actionCd }
-            ) {
-                Text(
-                    actionLabel,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-    }
 }
 
 fun formatHours(hours: Double): String = HoursCalc.formatHours(hours)

@@ -3,6 +3,19 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## 1.3.41 (versionCode 43)
+
+Lows + conflict sweep on tip `7f1f7e5` (1.3.40 / vc 42). Design pack `ui-rebuild-1.3.41`.
+
+- **L1:** Remove dead `DayRow` composable and unused `LazyColumn`/`items` imports from Home (week list stays gone; browse via History).
+- **L2:** More → Settings section deep-links — Export / Rates & goals / Appearance / Backup & cloud / Reminders & shade scroll to matching Settings cards; Settings row opens root.
+- **L3:** Widget respects session pause freeze (`pauseFreezeMinutes` via `SessionPausePreferences` + `SessionPause.effectiveNowMinutes`) so Today/week elapsed matches Home while paused; pause still does **not** clock out.
+- **E4:** Widget status shows `Paused · since {in}` when OPEN and paused.
+- **E1:** Shade Clock out clears `SessionPausePreferences` on SUCCESS / SUCCESS_OVERNIGHT / ALREADY_CLOSED (no linger until Home).
+- **E2/E3:** Keep TopAppBar ⋮ More alias; Home HH:MM:SS face vs HoursCalc decimal dual display intentional.
+
+Protected: Lunch CTA nav-only, EOD Open-app-only / `end_of_day_reminder`, CSV/PDF schema, locked hexes / splash `#5B3F9E` / Arc, D1–D4, cloud-off, onboarding 1.3.37, typed hours / equal in·out, Nav A / Idle B / Running A / More groups, pause does not close OPEN.
+
 ## 1.3.40 (versionCode 42)
 
 Timer-first Home IA (baseline `67628dc` / 1.3.39 vc 41). Design pack `ui-rebuild-1.3.40`; locked Nav A · Idle B · Running A · More groups.

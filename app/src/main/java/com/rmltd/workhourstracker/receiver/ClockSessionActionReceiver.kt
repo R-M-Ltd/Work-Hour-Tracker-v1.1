@@ -11,6 +11,7 @@ import com.rmltd.workhourstracker.MainActivity
 import com.rmltd.workhourstracker.WorkHoursApplication
 import com.rmltd.workhourstracker.data.ClockDayState
 import com.rmltd.workhourstracker.data.ClockOutResult
+import com.rmltd.workhourstracker.data.SessionPausePreferences
 import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +52,7 @@ class ClockSessionActionReceiver : BroadcastReceiver() {
                 when (result) {
                     ClockOutResult.SUCCESS, ClockOutResult.SUCCESS_OVERNIGHT,
                     ClockOutResult.ALREADY_CLOSED -> {
+                        SessionPausePreferences.clear(context)
                         WorkHoursWidgetUpdater.requestUpdate(context)
                         ClockSessionNotifier.sync(context)
                         toast(context, if (result == ClockOutResult.ALREADY_CLOSED) {

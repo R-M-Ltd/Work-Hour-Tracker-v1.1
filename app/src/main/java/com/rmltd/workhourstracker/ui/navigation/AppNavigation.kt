@@ -46,10 +46,14 @@ internal object Routes {
     const val ONBOARDING = OnboardingPreferences.ROUTE_ONBOARDING
     const val HOME = OnboardingPreferences.ROUTE_HOME
     const val LOG = "log"
-    const val SETTINGS = "settings"
+    const val SETTINGS_SECTION_ARG = "section"
+    /** Nav pattern: settings?section={section} (none = root). */
+    const val SETTINGS = "settings?section={$SETTINGS_SECTION_ARG}"
     const val ENTRY_ARG = "epochDay"
     const val ENTRY = "entry/{$ENTRY_ARG}"
     fun entry(date: LocalDate) = "entry/${date.toEpochDay()}"
+    fun settings(section: SettingsSection? = null): String =
+        "settings?section=${section?.name ?: "none"}"
 }
 
 /**
@@ -110,10 +114,10 @@ fun AppNavHost(
         }
     }
 
-    fun openSettingsFromMore() {
+    fun openSettingsFromMore(section: SettingsSection? = null) {
         showMoreSheet = false
         moreSelected = false
-        navController.navigate(Routes.SETTINGS)
+        navController.navigate(Routes.settings(section))
     }
 
     Scaffold(
@@ -179,7 +183,7 @@ fun AppNavHost(
                     viewModel = viewModel,
                     onDayClick = { date -> navController.navigate(Routes.entry(date)) },
                     onViewLog = { navigateTab(Routes.LOG) },
-                    onSettings = { navController.navigate(Routes.SETTINGS) },
+                    onSettings = { navController.navigate(Routes.settings()) },
                     onLogLunch = { navController.navigate(Routes.entry(LocalDate.now())) },
                     onOpenMore = {
                         moreSelected = true
@@ -220,10 +224,21 @@ fun AppNavHost(
                 )
             }
 
-            composable(Routes.SETTINGS) {
+            composable(
+                route = Routes.SETTINGS,
+                arguments = listOf(
+                    navArgument(Routes.SETTINGS_SECTION_ARG) {
+                        type = NavType.StringType
+                        defaultValue = "none"
+                    }
+                )
+            ) { backStackEntry ->
+                val sectionArg = backStackEntry.arguments?.getString(Routes.SETTINGS_SECTION_ARG)
+                val initialSection = SettingsSection.fromNavArg(sectionArg)
                 SettingsScreen(
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() },
+                    initialSection = initialSection,
                     // L2 1.3.35: Set today's times is hosted as AddChangeHoursSheet on Settings
                     // (not Routes.entry). Lunch CTA stays Entry nav-only.
                     onSetTodaysTimes = { /* sheet hosted inside SettingsScreen */ },
@@ -272,12 +287,12 @@ fun AppNavHost(
                 moreSelected = false
                 navigateTab(Routes.LOG)
             },
-            onExport = { openSettingsFromMore() },
-            onRatesAndGoals = { openSettingsFromMore() },
-            onAppearance = { openSettingsFromMore() },
-            onBackupAndCloud = { openSettingsFromMore() },
-            onRemindersAndShade = { openSettingsFromMore() },
-            onSettings = { openSettingsFromMore() }
+            onExport = { openSettingsFromMore(SettingsSection.EXPORT) },
+            onRatesAndGoals = { openSettingsFromMore(SettingsSection.RATES_GOALS) },
+            onAppearance = { openSettingsFromMore(SettingsSection.APPEARANCE) },
+            onBackupAndCloud = { openSettingsFromMore(SettingsSection.BACKUP_CLOUD) },
+            onRemindersAndShade = { openSettingsFromMore(SettingsSection.REMINDERS_SHADE) },
+            onSettings = { openSettingsFromMore(null) }
         )
     }
 }
