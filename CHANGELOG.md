@@ -3,6 +3,21 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## 1.3.40 (versionCode 42)
+
+Timer-first Home IA (baseline `67628dc` / 1.3.39 vc 41). Design pack `ui-rebuild-1.3.40`; locked Nav A · Idle B · Running A · More groups.
+
+- **TF-NAV:** 3-tab bottom bar Home | History | More; History reuses LogScreen as tab root; More opens grouped sheet; TopAppBar ⋮ thin alias to More.
+- **TF-IDLE:** Wide pill Clock in; quiet “Not clocked in” + date; no peer CTA farm beside primary.
+- **TF-RUN:** Large tabular elapsed; Pause | Stop peer secondary only; lunch caption text only.
+- **TF-PAUSE:** Net-new session pause prefs — freezes elapsed, does **not** write clockOut; Resume continues same OPEN punch; Stop closes.
+- **TF-MORE:** Grouped ModalBottomSheet Today / Log & pay / App (typed Add/Change, lunch nav-only, export, rates & goals, appearance, backup/cloud, reminders & shade, Settings).
+- **TF-GOALS:** Goals card removed from Home; Settings Weekly goal / Rates & goals via More.
+- **TF-TYPED:** Add/Change demoted to More → Today; sheet behavior (typed, S3/S4, equal in·out) unchanged.
+- Home week LazyColumn decluttered (browse via History).
+
+Protected: Lunch CTA nav-only, EOD Open-app-only / `end_of_day_reminder`, CSV/PDF schema, locked hexes / splash `#5B3F9E` / Arc, D1–D4, cloud-off, onboarding 1.3.37, typed hours / equal in·out, 1.3.38–1.3.39 polish (Appearance, widget, SessionElapsed math, backup stamp, pay-period, shade).
+
 ## 1.3.39 (versionCode 41)
 
 Leftover cleanup on tip `dd0be56` (1.3.38 / vc 40):

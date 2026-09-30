@@ -37,7 +37,8 @@ import java.time.format.DateTimeFormatter
 fun LogScreen(
     viewModel: WorkHoursViewModel,
     onBack: () -> Unit,
-    onEditDay: (LocalDate) -> Unit
+    onEditDay: (LocalDate) -> Unit,
+    isTabRoot: Boolean = false
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -121,8 +122,10 @@ fun LogScreen(
             TopAppBar(
                 title = { Text("History") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    if (!isTabRoot) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {

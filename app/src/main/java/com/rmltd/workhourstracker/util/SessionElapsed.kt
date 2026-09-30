@@ -11,6 +11,10 @@ import kotlin.math.abs
  * break / no-lunch fields; closed days use persisted [DailyEntry.hoursWorked].
  *
  * Call sites must agree within [TOLERANCE_HOURS] (0.01h).
+ *
+ * When [pauseFreezeMinutes] is set (session paused), open-punch elapsed uses
+ * that frozen minutes-from-midnight instead of live [nowMinutes] — pause does
+ * not close the OPEN punch.
  */
 object SessionElapsed {
 
@@ -22,10 +26,12 @@ object SessionElapsed {
      * invent today's total.
      *
      * @param nowMinutes minutes-from-midnight used for open-punch live elapsed
+     * @param pauseFreezeMinutes when non-null, open punch uses this instead of [nowMinutes]
      */
     fun todayDisplayHours(
         todayEntry: DailyEntry?,
-        nowMinutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
+        nowMinutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute,
+        pauseFreezeMinutes: Int? = null
     ): Double? {
         if (todayEntry == null) return null
         val kind = ClockDayState.classify(
@@ -36,9 +42,11 @@ object SessionElapsed {
         return when (kind) {
             ClockDayState.Kind.OPEN -> {
                 val inM = todayEntry.clockInMinutes ?: return null
+                val endM = (pauseFreezeMinutes ?: nowMinutes)
+                    .coerceIn(0, HoursCalc.MINUTES_PER_DAY - 1)
                 HoursCalc.hoursWorked(
                     clockInMinutes = inM,
-                    clockOutMinutes = nowMinutes.coerceIn(0, HoursCalc.MINUTES_PER_DAY - 1),
+                    clockOutMinutes = endM,
                     lunchOutMinutes = todayEntry.lunchOutMinutes,
                     lunchInMinutes = todayEntry.lunchInMinutes,
                     equalOutMeansFullDay = false,
@@ -61,13 +69,14 @@ object SessionElapsed {
     fun weekActualHours(
         weekEntries: List<DailyEntry>,
         todayEpochDay: Long,
-        nowMinutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute
+        nowMinutes: Int = LocalTime.now().hour * 60 + LocalTime.now().minute,
+        pauseFreezeMinutes: Int? = null
     ): Double {
         var sum = 0.0
         var todayHandled = false
         for (e in weekEntries) {
             if (e.dateEpochDay == todayEpochDay) {
-                val live = todayDisplayHours(e, nowMinutes)
+                val live = todayDisplayHours(e, nowMinutes, pauseFreezeMinutes)
                 if (live != null) {
                     sum += live
                     todayHandled = true

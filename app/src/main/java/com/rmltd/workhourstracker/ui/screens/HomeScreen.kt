@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,10 +27,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.rmltd.workhourstracker.data.ClockInResult
 import com.rmltd.workhourstracker.data.ClockOutResult
 import com.rmltd.workhourstracker.data.HomeDraftPreferences
+import com.rmltd.workhourstracker.data.SessionPausePreferences
 import com.rmltd.workhourstracker.data.UpdateOpenClockInResult
 import com.rmltd.workhourstracker.data.SaveEntryResult
 import com.rmltd.workhourstracker.ui.components.AddChangeHoursDraft
@@ -47,11 +54,19 @@ import com.rmltd.workhourstracker.util.HomeOvernightCopy
 import com.rmltd.workhourstracker.util.PayEstimate
 import com.rmltd.workhourstracker.util.HoursCalc
 import com.rmltd.workhourstracker.util.SessionElapsed
+import com.rmltd.workhourstracker.util.SessionPause
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+
+/** Actions demoted into More → Today (1.3.40); consumed once on Home. */
+enum class HomeMoreAction {
+    ADD_CHANGE_HOURS,
+    SET_TODAYS_TIMES,
+    FORGOT_CLOCK_OUT
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,9 +75,15 @@ fun HomeScreen(
     onDayClick: (LocalDate) -> Unit,
     onViewLog: () -> Unit,
     onSettings: () -> Unit,
-    onLogLunch: () -> Unit
+    onLogLunch: () -> Unit,
+    onOpenMore: () -> Unit = {},
+    pendingMoreAction: HomeMoreAction? = null,
+    onPendingMoreActionConsumed: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    // Nav callbacks still wired from AppNavHost; More sheet owns History/Settings/Lunch.
+    @Suppress("UNUSED_VARIABLE", "UNUSED_PARAMETER")
+    val _navKeep = Triple(onViewLog, onSettings, onLogLunch)
     val view = LocalView.current
     val entries by viewModel.currentWeekEntries.collectAsState()
     val weekStart by viewModel.weekStart.collectAsState()
@@ -70,15 +91,11 @@ fun HomeScreen(
     val hourlyRate by viewModel.hourlyRate.collectAsState()
     val homeClock by viewModel.homeClockUi.collectAsState()
     val clockBusy by viewModel.clockOpInProgress.collectAsState()
-    val daysInWeek = viewModel.daysInWeek(weekStart)
     val total = viewModel.runningTotal(entries)
     val today = LocalDate.now()
-    val todayInThisWeek = daysInWeek.contains(today)
-    val progress = PayEstimate.progressFraction(total, weeklyGoal)
-    val remaining = PayEstimate.remainingHours(total, weeklyGoal)
-    val overtime = PayEstimate.isOvertime(total, weeklyGoal)
-    val overtimeHrs = PayEstimate.overtimeHours(total, weeklyGoal)
-    val weekPayEstimate = PayEstimate.roughPay(total, hourlyRate)
+    // weeklyGoal / hourlyRate / weekStart still collected for future chrome; week list decluttered.
+    @Suppress("UNUSED_VARIABLE")
+    val _goalRateKeep = weeklyGoal to hourlyRate to weekStart
 
     var showOvernightDialog by remember { mutableStateOf(false) }
     var showManualOvernightConfirm by remember { mutableStateOf(false) }
@@ -91,8 +108,8 @@ fun HomeScreen(
     var zeroReasonText by remember { mutableStateOf("") }
     var showZeroHoursDialog by remember { mutableStateOf(false) }
     var zeroHoursReasonText by remember { mutableStateOf("") }
-    var showOverflow by remember { mutableStateOf(false) }
     var showAddChangeSheet by remember { mutableStateOf(false) }
+    var pauseRevision by remember { mutableStateOf(0) }
     var addChangeTitle by remember { mutableStateOf("Add hours") }
     var pendingTypedHours by remember { mutableStateOf<Double?>(null) }
     var pendingNoLunch by remember { mutableStateOf(false) }
@@ -101,11 +118,14 @@ fun HomeScreen(
     var sheetSuspendedForPicker by remember { mutableStateOf(false) }
     var sheetDraftHoursText by remember { mutableStateOf("") }
     var sheetDraftNote by remember { mutableStateOf("") }
-    // Live tick for open-punch elapsed total
+    // Live tick for open-punch elapsed total (1s when session open for HH:MM:SS face)
     var nowEpochMillis by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
+    val todayEntryForTick = viewModel.entryFor(LocalDate.now(), entries)
+    val sessionOpenForTick = todayEntryForTick?.clockInMinutes != null &&
+        todayEntryForTick?.clockOutMinutes == null
+    LaunchedEffect(sessionOpenForTick) {
         while (true) {
-            delay(30_000)
+            delay(if (sessionOpenForTick) 1_000L else 30_000L)
             nowEpochMillis = System.currentTimeMillis()
         }
     }
@@ -460,15 +480,156 @@ fun HomeScreen(
         }
     }
 
+
+    // Pause: freeze elapsed display without closing OPEN punch
+    @Suppress("UNUSED_EXPRESSION")
+    pauseRevision
+    val todayEpoch = today.toEpochDay()
+    val paused = SessionPausePreferences.isPaused(context, todayEpoch)
+    val freezeMillis = SessionPausePreferences.freezeEpochMillis(context, todayEpoch)
+    // Freeze minutes available for SessionElapsed callers (goals moved off Home).
+    @Suppress("UNUSED_VARIABLE")
+    val pauseFreezeMinutes = SessionPause.effectiveNowMinutes(
+        liveNowMinutes = java.time.LocalTime.now().let { it.hour * 60 + it.minute },
+        freezeEpochMillis = freezeMillis,
+        today = today
+    ).takeIf { paused }
+
+    val todayOpenSession = todayEntry?.clockInMinutes != null &&
+        todayEntry?.clockOutMinutes == null &&
+        !homeClock.overnightPending
+
+    // Clear stale pause when day is no longer OPEN
+    LaunchedEffect(todayOpenSession, todayEpoch) {
+        if (!todayOpenSession && SessionPausePreferences.isPaused(context, todayEpoch)) {
+            SessionPausePreferences.clear(context)
+            pauseRevision++
+        }
+    }
+
+    // Consume More → Today actions (Add/Change, Set times, Forgot)
+    LaunchedEffect(pendingMoreAction) {
+        when (pendingMoreAction) {
+            HomeMoreAction.ADD_CHANGE_HOURS -> {
+                val hasHours = todayEntry?.hasPersistedHours() == true
+                addChangeTitle = if (hasHours) "Change hours" else "Add hours"
+                sheetDraftHoursText = when {
+                    todayEntry?.hasPersistedHours() == true ->
+                        formatHoursField(todayEntry!!.hoursWorked)
+                    else -> ""
+                }
+                sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
+                sheetNoLunch = todayEntry?.noLunchTaken ?: false
+                sheetSuspendedForPicker = false
+                showAddChangeSheet = true
+                onPendingMoreActionConsumed()
+            }
+            HomeMoreAction.SET_TODAYS_TIMES -> {
+                addChangeTitle = "Set today's times"
+                sheetDraftHoursText = when {
+                    todayEntry?.hasPersistedHours() == true ->
+                        formatHoursField(todayEntry!!.hoursWorked)
+                    else -> ""
+                }
+                sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
+                sheetNoLunch = todayEntry?.noLunchTaken == true
+                sheetSuspendedForPicker = false
+                showAddChangeSheet = true
+                onPendingMoreActionConsumed()
+            }
+            HomeMoreAction.FORGOT_CLOCK_OUT -> {
+                showForgotClockOut = true
+                onPendingMoreActionConsumed()
+            }
+            null -> Unit
+        }
+    }
+
+    fun doClockIn() {
+        if (homeClock.overnightPending) {
+            showOvernightDialog = true
+            return
+        }
+        val nowMins = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
+        viewModel.clockInNow(today) { result ->
+            when (result) {
+                ClockInResult.BLOCKED_OVERNIGHT -> {
+                    showOvernightDialog = true
+                }
+                ClockInResult.STARTED -> {
+                    homeInMinutes = nowMins
+                    SessionPausePreferences.clear(context)
+                    pauseRevision++
+                    ClockHaptics.performSuccess(view)
+                    Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
+                }
+                ClockInResult.ALREADY_OPEN -> {
+                    Toast.makeText(context, "Already clocked in", Toast.LENGTH_SHORT).show()
+                }
+                ClockInResult.ALREADY_CLOSED -> {
+                    Toast.makeText(
+                        context,
+                        "Today already has hours — edit the day to change it",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                ClockInResult.BUSY -> {
+                    Toast.makeText(context, "Please wait…", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun doClockOut() {
+        viewModel.clockOutNow(today) { result ->
+            when (result) {
+                ClockOutResult.SUCCESS,
+                ClockOutResult.SUCCESS_OVERNIGHT -> {
+                    SessionPausePreferences.clear(context)
+                    pauseRevision++
+                    ClockHaptics.performSuccess(view)
+                }
+                else -> Unit
+            }
+            val msg = when (result) {
+                ClockOutResult.SUCCESS -> "Clocked out now"
+                ClockOutResult.SUCCESS_OVERNIGHT ->
+                    HomeOvernightCopy.clockOutOvernightToast(
+                        homeClock.openOvernightDate,
+                        today
+                    )
+                ClockOutResult.FAILED ->
+                    "Clock in first (or use a different time)"
+                ClockOutResult.ALREADY_CLOSED ->
+                    "Today is already clocked out — edit the day to change it"
+                ClockOutResult.BUSY -> "Please wait…"
+            }
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun doPause() {
+        if (!todayOpenSession || paused) return
+        SessionPausePreferences.pause(context, todayEpoch, System.currentTimeMillis())
+        pauseRevision++
+    }
+
+    fun doResume() {
+        if (!paused) return
+        SessionPausePreferences.resume(context)
+        pauseRevision++
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("This Week")
+                        Text("Work Hours")
                         Text(
-                            formatHours(total),
+                            "Week · ${formatHours(total)}" +
+                                if (todayOpenSession && !paused) " · live" else "",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -480,486 +641,299 @@ fun HomeScreen(
                     actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 actions = {
+                    // Thin alias to bottom-bar More (single entry preferred)
                     IconButton(
-                        onClick = { showOverflow = true },
+                        onClick = onOpenMore,
                         modifier = Modifier.semantics { contentDescription = "More options" }
                     ) {
                         Icon(Icons.Filled.MoreVert, contentDescription = "More options")
-                    }
-                    DropdownMenu(
-                        expanded = showOverflow,
-                        onDismissRequest = { showOverflow = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Set today's times…") },
-                            onClick = {
-                                showOverflow = false
-                                addChangeTitle = "Set today's times"
-                                sheetDraftHoursText = when {
-                                    todayEntry?.hasPersistedHours() == true ->
-                                        formatHoursField(todayEntry!!.hoursWorked)
-                                    else -> ""
-                                }
-                                sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
-                                sheetNoLunch = todayEntry?.noLunchTaken == true
-                                sheetSuspendedForPicker = false
-                                showAddChangeSheet = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Log lunch / break…") },
-                            onClick = {
-                                showOverflow = false
-                                onLogLunch()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Forgot to clock out…") },
-                            onClick = {
-                                showOverflow = false
-                                showForgotClockOut = true
-                            },
-                            enabled = homeClock.clockOutEnabled && !clockBusy
-                        )
-                        DropdownMenuItem(
-                            text = { Text("History") },
-                            onClick = {
-                                showOverflow = false
-                                onViewLog()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Settings") },
-                            onClick = {
-                                showOverflow = false
-                                onSettings()
-                            }
-                        )
                     }
                 }
             )
         }
     ) { padding ->
-        val stripContainer = if (overtime) {
-            MaterialTheme.colorScheme.tertiaryContainer
-        } else {
-            MaterialTheme.colorScheme.primaryContainer
+        @Suppress("UNUSED_EXPRESSION")
+        nowEpochMillis
+        val dateLabel = today.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()) +
+            " · " + today.format(DateTimeFormatter.ofPattern("MMM d"))
+        val lunchCaption = when {
+            todayEntry?.noLunchTaken == true -> "No lunch taken · caption only"
+            todayEntry?.breakDurationMinutes != null -> "Break logged · caption only"
+            todayOpenSession -> "Lunch lives in More · caption only"
+            else -> null
         }
-        val stripOn = if (overtime) {
-            MaterialTheme.colorScheme.onTertiaryContainer
-        } else {
-            MaterialTheme.colorScheme.onPrimaryContainer
+        val closedTodayHours = when {
+            todayEntry?.hasPersistedHours() == true -> todayEntry!!.hoursWorked
+            else -> null
         }
-        val stripProgressColor = if (overtime) {
-            MaterialTheme.colorScheme.tertiary
-        } else {
-            MaterialTheme.colorScheme.primary
-        }
-        // Single LazyColumn: whole Home scrolls; no weight(1f) empty gap above History.
-        LazyColumn(
+
+        Box(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(16.dp)
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
         ) {
-            item {
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = stripContainer
-                    ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(20.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(96.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                progress = progress,
-                                modifier = Modifier.fillMaxSize(),
-                                strokeWidth = 10.dp,
-                                color = stripProgressColor,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                            Text(
-                                "${(progress * 100).toInt()}%",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = stripOn
-                            )
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "This week",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = stripOn.copy(alpha = 0.85f)
-                            )
-                            Text(
-                                "${weekStart.format(DateTimeFormatter.ofPattern("MMM d"))} – " +
-                                    daysInWeek.last().format(DateTimeFormatter.ofPattern("MMM d")),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = stripOn
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                formatHours(total),
-                                style = MaterialTheme.typography.headlineLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = stripOn
-                            )
-                            Text(
-                                if (overtime) {
-                                    "Goal ${formatHours(weeklyGoal)} · ${formatHours(overtimeHrs)} over"
-                                } else {
-                                    "Goal ${formatHours(weeklyGoal)} · ${formatHours(remaining)} remaining"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = stripOn.copy(alpha = 0.85f)
-                            )
-                            weekPayEstimate?.let { pay ->
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    "Est. ${PayEstimate.formatCurrencyUsd(pay)} (not payroll)",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = stripOn.copy(alpha = 0.92f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(Modifier.weight(0.35f))
 
-            if (todayInThisWeek) {
-                item {
-                    Spacer(Modifier.height(12.dp))
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                "Today",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            // Today's total: shared SessionElapsed (open live / closed saved)
-                            val todayOpen = todayEntry?.clockInMinutes != null &&
-                                todayEntry?.clockOutMinutes == null &&
-                                !homeClock.overnightPending
-                            @Suppress("UNUSED_EXPRESSION")
-                            nowEpochMillis
-                            val nowM = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
-                            val displayTotal: Double? = SessionElapsed.todayDisplayHours(
-                                todayEntry, nowM
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                displayTotal?.let { formatHours(it) } ?: "—",
-                                style = MaterialTheme.typography.headlineLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.semantics {
-                                    contentDescription = "Today's total"
-                                }
-                            )
-                            val hasHours = todayEntry?.hasPersistedHours() == true
-                            TextButton(
-                                onClick = {
-                                    addChangeTitle = if (hasHours) "Change hours" else "Add hours"
-                                    sheetDraftHoursText = when {
-                                        todayEntry?.hasPersistedHours() == true ->
-                                            formatHoursField(todayEntry!!.hoursWorked)
-                                        else -> ""
-                                    }
-                                    sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
-                                    sheetNoLunch = todayEntry?.noLunchTaken == true || sheetNoLunch
-                                    sheetSuspendedForPicker = false
-                                    sheetNoLunch = todayEntry?.noLunchTaken ?: false
-                                    showAddChangeSheet = true
-                                },
-                                enabled = !clockBusy,
-                                modifier = Modifier
-                                    .heightIn(min = 48.dp)
-                                    .semantics {
-                                        contentDescription =
-                                            if (hasHours) "Change" else "Add hours"
-                                    }
-                            ) {
-                                Text(
-                                    if (hasHours) "Change" else "Add hours",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                            // Status line
-                            val statusLine = when {
-                                homeClock.overnightPending ->
-                                    "Open shift unfinished — resolve to continue"
-                                todayOpen -> {
-                                    val inLabel = HoursCalc.formatClock(todayEntry!!.clockInMinutes!!)
-                                    "Clocked in · $inLabel"
-                                }
-                                todayEntry?.clockOutMinutes != null -> {
-                                    val range = HoursCalc.formatRange(
-                                        todayEntry?.clockInMinutes,
-                                        todayEntry?.clockOutMinutes
-                                    )
-                                    if (range != null) "Clocked out · $range" else "Day saved"
-                                }
-                                todayEntry?.hoursSourceEnum() == HoursSource.TYPED ->
-                                    "Typed hours saved"
-                                else -> "Not clocked in"
-                            }
-                            Text(
-                                statusLine,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            if (homeClock.overnightPending) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Text(
-                                        "An open shift is still unfinished. Clock out finishes it, or use Clock in for options.",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                                    )
-                                }
-                            }
-                            // ONE stateful primary: Clock in ↔ Clock out
-                            val primaryIsOut = homeClock.clockOutEnabled && !homeClock.overnightPending
-                            Button(
-                                onClick = {
-                                    if (homeClock.overnightPending) {
-                                        showOvernightDialog = true
-                                        return@Button
-                                    }
-                                    if (primaryIsOut) {
-                                        viewModel.clockOutNow(today) { result ->
-                                            when (result) {
-                                                ClockOutResult.SUCCESS,
-                                                ClockOutResult.SUCCESS_OVERNIGHT ->
-                                                    ClockHaptics.performSuccess(view)
-                                                else -> Unit
-                                            }
-                                            val msg = when (result) {
-                                                ClockOutResult.SUCCESS -> "Clocked out now"
-                                                ClockOutResult.SUCCESS_OVERNIGHT ->
-                                                    HomeOvernightCopy.clockOutOvernightToast(
-                                                        homeClock.openOvernightDate,
-                                                        today
-                                                    )
-                                                ClockOutResult.FAILED ->
-                                                    "Clock in first (or use a different time)"
-                                                ClockOutResult.ALREADY_CLOSED ->
-                                                    "Today is already clocked out — edit the day to change it"
-                                                ClockOutResult.BUSY -> "Please wait…"
-                                            }
-                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                        }
-                                    } else {
-                                        val nowMins = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
-                                        viewModel.clockInNow(today) { result ->
-                                            when (result) {
-                                                ClockInResult.BLOCKED_OVERNIGHT -> {
-                                                    showOvernightDialog = true
-                                                }
-                                                ClockInResult.STARTED -> {
-                                                    homeInMinutes = nowMins
-                                                    ClockHaptics.performSuccess(view)
-                                                    Toast.makeText(context, "Clocked in now", Toast.LENGTH_SHORT).show()
-                                                }
-                                                ClockInResult.ALREADY_OPEN -> {
-                                                    Toast.makeText(context, "Already clocked in", Toast.LENGTH_SHORT).show()
-                                                }
-                                                ClockInResult.ALREADY_CLOSED -> {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Today already has hours — edit the day to change it",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                                ClockInResult.BUSY -> {
-                                                    Toast.makeText(context, "Please wait…", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                enabled = !clockBusy && (
-                                    if (primaryIsOut) homeClock.clockOutEnabled
-                                    else homeClock.clockInEnabled || homeClock.overnightPending
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 56.dp)
-                                    .semantics {
-                                        contentDescription =
-                                            if (primaryIsOut) "Clock out" else "Clock in"
-                                    }
-                            ) {
-                                Text(
-                                    if (primaryIsOut) "Clock out" else "Clock in",
-                                    maxLines = 1
-                                )
-                            }
-                            Text(
-                                HomeOvernightCopy.clockOutHelper(
-                                    homeClock.overnightPending,
-                                    homeClock.openOvernightDate,
-                                    today
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Goals secondary card (under Today / above week list) — not a second primary CTA
-            item {
-                Spacer(Modifier.height(12.dp))
-                val nowMGoal = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
-                @Suppress("UNUSED_EXPRESSION")
-                nowEpochMillis
-                val goalHours = weeklyGoal
-                val actualHours = SessionElapsed.weekActualHours(
-                    entries, today.toEpochDay(), nowMGoal
-                )
-                ElevatedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics { contentDescription = "Weekly goals" },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                when {
+                    homeClock.overnightPending -> {
                         Text(
-                            "This week goal",
-                            style = MaterialTheme.typography.titleSmall,
+                            "Open shift unfinished",
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        if (goalHours <= 0.0) {
-                            Spacer(Modifier.height(8.dp))
+                        Text(
+                            dateLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp)
+                        ) {
                             Text(
-                                "Set a weekly goal in Settings",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                "An open shift is still unfinished. Clock out finishes it, or use Clock in for options.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                             )
-                            TextButton(onClick = onSettings) {
-                                Text("Open Settings")
-                            }
-                        } else {
-                            val over = actualHours > goalHours
-                            val fill = (actualHours / goalHours).toFloat().coerceIn(0f, 1f)
-                            val pct = ((actualHours / goalHours) * 100.0).toInt()
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.size(72.dp)
-                                ) {
-                                    CircularProgressIndicator(
-                                        progress = fill,
-                                        modifier = Modifier.fillMaxSize(),
-                                        strokeWidth = 8.dp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                    Text(
-                                        "${"%.2f".format(java.util.Locale.US, actualHours)} / ${"%.2f".format(java.util.Locale.US, goalHours)}h",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                Spacer(Modifier.width(14.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        if (over) {
-                                            "$pct% · +${formatHours(actualHours - goalHours)} over"
-                                        } else {
-                                            "$pct%"
-                                        },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    TextButton(
-                                        onClick = onSettings,
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text("Edit goal in Settings")
-                                    }
-                                }
-                            }
+                        }
+                        Button(
+                            onClick = { showOvernightDialog = true },
+                            enabled = !clockBusy,
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .height(60.dp)
+                                .semantics { contentDescription = "Clock in" },
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Text("Clock in", style = MaterialTheme.typography.titleMedium)
+                        }
+                        Text(
+                            HomeOvernightCopy.clockOutHelper(
+                                homeClock.overnightPending,
+                                homeClock.openOvernightDate,
+                                today
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+
+                    todayOpenSession && paused -> {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        ) {
+                            Text(
+                                "●  Paused",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            )
+                        }
+                        Text(
+                            "PAUSED AT",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 1.sp
+                        )
+                        val inM = todayEntry!!.clockInMinutes!!
+                        val endMs = freezeMillis ?: nowEpochMillis
+                        val hms = SessionPause.formatHms(
+                            SessionPause.elapsedMillis(inM, endMs, today)
+                        )
+                        Text(
+                            hms,
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontSize = 56.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Light
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .semantics { contentDescription = "Elapsed time" }
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = { doResume() },
+                                enabled = !clockBusy,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 52.dp)
+                                    .semantics { contentDescription = "Resume" },
+                                shape = RoundedCornerShape(28.dp)
+                            ) { Text("Resume") }
+                            OutlinedButton(
+                                onClick = { doClockOut() },
+                                enabled = !clockBusy && homeClock.clockOutEnabled,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 52.dp)
+                                    .semantics { contentDescription = "Stop" },
+                                shape = RoundedCornerShape(28.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                ),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                            ) { Text("Stop") }
+                        }
+                    }
+
+                    todayOpenSession -> {
+                        val inLabel = HoursCalc.formatClock(todayEntry!!.clockInMinutes!!)
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        ) {
+                            Text(
+                                "●  Clocked in · $inLabel",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            )
+                        }
+                        Text(
+                            "ELAPSED",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 1.sp
+                        )
+                        val inM = todayEntry!!.clockInMinutes!!
+                        val hms = SessionPause.formatHms(
+                            SessionPause.elapsedMillis(inM, nowEpochMillis, today)
+                        )
+                        Text(
+                            hms,
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontSize = 56.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Light
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .semantics { contentDescription = "Elapsed time" }
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { doPause() },
+                                enabled = !clockBusy,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 52.dp)
+                                    .semantics { contentDescription = "Pause" },
+                                shape = RoundedCornerShape(28.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                )
+                            ) { Text("Pause") }
+                            OutlinedButton(
+                                onClick = { doClockOut() },
+                                enabled = !clockBusy && homeClock.clockOutEnabled,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 52.dp)
+                                    .semantics { contentDescription = "Stop" },
+                                shape = RoundedCornerShape(28.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                ),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                            ) { Text("Stop") }
+                        }
+                        if (lunchCaption != null) {
+                            Text(
+                                lunchCaption,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 14.dp)
+                            )
+                        }
+                    }
+
+                    else -> {
+                        // Idle B — wide pill Clock in; no goals; no peer CTA farm
+                        Text(
+                            "Not clocked in",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            dateLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 28.dp)
+                        )
+                        Button(
+                            onClick = { doClockIn() },
+                            enabled = !clockBusy && (
+                                homeClock.clockInEnabled || homeClock.overnightPending
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .height(60.dp)
+                                .semantics { contentDescription = "Clock in" },
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Icon(
+                                Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(
+                                "Clock in",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        if (closedTodayHours != null) {
+                            Text(
+                                "Today · ${formatHours(closedTodayHours)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 20.dp)
+                            )
                         }
                     }
                 }
+
+                Spacer(Modifier.weight(0.65f))
             }
-
-            item { Spacer(Modifier.height(16.dp)) }
-
-            items(daysInWeek) { date ->
-                val entry = viewModel.entryFor(date, entries)
-                val fullLabel = HoursCalc.formatDayLabel(
-                    entry?.clockInMinutes,
-                    entry?.clockOutMinutes,
-                    entry?.lunchOutMinutes,
-                    entry?.lunchInMinutes,
-                    entry?.breakDurationMinutes
-                )
-                val partialLabel = when {
-                    fullLabel != null -> fullLabel
-                    entry?.clockInMinutes != null ->
-                        "In ${HoursCalc.formatClock(entry.clockInMinutes!!)}"
-                    else -> null
-                }
-                DayRow(
-                    date = date,
-                    // Closed punch OR typed hours (incl. 0.00) — open punches stay hidden.
-                    hours = entry?.takeIf { it.hasPersistedHours() }?.hoursWorked,
-                    clockLabel = partialLabel,
-                    hasEntry = entry != null,
-                    comments = entry?.comments,
-                    isToday = date == today,
-                    onClick = { onDayClick(date) }
-                )
-                Spacer(Modifier.height(8.dp))
-            }
-
-            // History via ⋮ only (1.3.34 declutter)
         }
-
     }
 
     if (showOvernightDialog) {
@@ -987,8 +961,11 @@ fun HomeScreen(
                             viewModel.clockOutNow(today) { result ->
                                 when (result) {
                                     ClockOutResult.SUCCESS,
-                                    ClockOutResult.SUCCESS_OVERNIGHT ->
+                                    ClockOutResult.SUCCESS_OVERNIGHT -> {
+                                        SessionPausePreferences.clear(context)
+                                        pauseRevision++
                                         ClockHaptics.performSuccess(view)
+                                    }
                                     else -> Unit
                                 }
                                 val msg = when (result) {
@@ -1237,8 +1214,11 @@ fun HomeScreen(
                         viewModel.clockOutAt(today, minutes) { result ->
                             when (result) {
                                 ClockOutResult.SUCCESS,
-                                ClockOutResult.SUCCESS_OVERNIGHT ->
+                                ClockOutResult.SUCCESS_OVERNIGHT -> {
+                                    SessionPausePreferences.clear(context)
+                                    pauseRevision++
                                     ClockHaptics.performSuccess(view)
+                                }
                                 else -> Unit
                             }
                             val msg = when (result) {
