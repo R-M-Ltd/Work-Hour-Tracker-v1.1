@@ -38,6 +38,9 @@ import java.time.LocalTime
  */
 object WorkHoursWidgetUpdater {
 
+    /** Widget tap → MainActivity opens Home + Edit today sheet (1.3.42). */
+    const val EXTRA_OPEN_EDIT_TODAY = "com.rmltd.workhourstracker.EXTRA_OPEN_EDIT_TODAY"
+
     private const val OPEN_REFRESH_MS = 60_000L
     private const val REFRESH_REQUEST_CODE = 4401
 
@@ -136,6 +139,7 @@ object WorkHoursWidgetUpdater {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_OPEN_EDIT_TODAY, true)
         }
         val pending = PendingIntent.getActivity(
             context,

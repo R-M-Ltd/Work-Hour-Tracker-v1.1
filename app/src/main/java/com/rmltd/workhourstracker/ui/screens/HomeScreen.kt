@@ -18,7 +18,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
@@ -47,6 +52,7 @@ import com.rmltd.workhourstracker.util.HomeDraftSnapshot
 import com.rmltd.workhourstracker.util.HomeDraftStash
 import com.rmltd.workhourstracker.util.HomeManualTimes
 import com.rmltd.workhourstracker.util.HomeOpenPunch
+import com.rmltd.workhourstracker.util.HomeSecondaryTimes
 import com.rmltd.workhourstracker.util.ZeroTimeNote
 import com.rmltd.workhourstracker.util.HomeOvernightCopy
 import com.rmltd.workhourstracker.util.PayEstimate
@@ -59,10 +65,9 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-/** Actions demoted into More → Today (1.3.40); consumed once on Home. */
+/** Actions demoted into More → Day (1.3.42); consumed once on Home. */
 enum class HomeMoreAction {
-    ADD_CHANGE_HOURS,
-    SET_TODAYS_TIMES,
+    EDIT_TODAY,
     FORGOT_CLOCK_OUT
 }
 
@@ -505,34 +510,24 @@ fun HomeScreen(
         }
     }
 
-    // Consume More → Today actions (Add/Change, Set times, Forgot)
+    fun openEditTodaySheet() {
+        addChangeTitle = "Edit today"
+        sheetDraftHoursText = when {
+            todayEntry?.hasPersistedHours() == true ->
+                formatHoursField(todayEntry!!.hoursWorked)
+            else -> ""
+        }
+        sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
+        sheetNoLunch = todayEntry?.noLunchTaken == true
+        sheetSuspendedForPicker = false
+        showAddChangeSheet = true
+    }
+
+    // Consume More → Day actions (Edit today, Forgot)
     LaunchedEffect(pendingMoreAction) {
         when (pendingMoreAction) {
-            HomeMoreAction.ADD_CHANGE_HOURS -> {
-                val hasHours = todayEntry?.hasPersistedHours() == true
-                addChangeTitle = if (hasHours) "Change hours" else "Add hours"
-                sheetDraftHoursText = when {
-                    todayEntry?.hasPersistedHours() == true ->
-                        formatHoursField(todayEntry!!.hoursWorked)
-                    else -> ""
-                }
-                sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
-                sheetNoLunch = todayEntry?.noLunchTaken ?: false
-                sheetSuspendedForPicker = false
-                showAddChangeSheet = true
-                onPendingMoreActionConsumed()
-            }
-            HomeMoreAction.SET_TODAYS_TIMES -> {
-                addChangeTitle = "Set today's times"
-                sheetDraftHoursText = when {
-                    todayEntry?.hasPersistedHours() == true ->
-                        formatHoursField(todayEntry!!.hoursWorked)
-                    else -> ""
-                }
-                sheetDraftNote = homeCommentsDraft.ifBlank { todayEntry?.comments.orEmpty() }
-                sheetNoLunch = todayEntry?.noLunchTaken == true
-                sheetSuspendedForPicker = false
-                showAddChangeSheet = true
+            HomeMoreAction.EDIT_TODAY -> {
+                openEditTodaySheet()
                 onPendingMoreActionConsumed()
             }
             HomeMoreAction.FORGOT_CLOCK_OUT -> {
@@ -664,6 +659,16 @@ fun HomeScreen(
             todayEntry?.hasPersistedHours() == true -> todayEntry!!.hoursWorked
             else -> null
         }
+        val secondaryIn = homeInMinutes ?: todayEntry?.clockInMinutes
+        val secondaryOut = homeOutMinutes ?: todayEntry?.clockOutMinutes
+        val showSecondaryTimes = HomeSecondaryTimes.shouldShow(
+            openSession = todayOpenSession,
+            overnightPending = homeClock.overnightPending,
+            inMinutes = secondaryIn,
+            outMinutes = secondaryOut
+        )
+        val secondaryStartLabel = HomeSecondaryTimes.startChipLabel(todayOpenSession, secondaryIn)
+        val secondaryStopLabel = HomeSecondaryTimes.stopChipLabel(todayOpenSession, secondaryOut)
 
         Box(
             modifier = Modifier
@@ -796,6 +801,16 @@ fun HomeScreen(
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
                             ) { Text("Stop") }
                         }
+                        HomeQuietSecondaryTimes(
+                            startLabel = secondaryStartLabel,
+                            stopLabel = secondaryStopLabel,
+                            visible = showSecondaryTimes,
+                            onStartClick = { openEditTodaySheet() },
+                            onStopClick = {
+                                if (todayOpenSession) showForgotClockOut = true
+                                else openEditTodaySheet()
+                            }
+                        )
                     }
 
                     todayOpenSession -> {
@@ -871,6 +886,16 @@ fun HomeScreen(
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
                             ) { Text("Stop") }
                         }
+                        HomeQuietSecondaryTimes(
+                            startLabel = secondaryStartLabel,
+                            stopLabel = secondaryStopLabel,
+                            visible = showSecondaryTimes,
+                            onStartClick = { openEditTodaySheet() },
+                            onStopClick = {
+                                if (todayOpenSession) showForgotClockOut = true
+                                else openEditTodaySheet()
+                            }
+                        )
                         if (lunchCaption != null) {
                             Text(
                                 lunchCaption,
@@ -918,6 +943,13 @@ fun HomeScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
+                        HomeQuietSecondaryTimes(
+                            startLabel = secondaryStartLabel,
+                            stopLabel = secondaryStopLabel,
+                            visible = showSecondaryTimes,
+                            onStartClick = { openEditTodaySheet() },
+                            onStopClick = { openEditTodaySheet() }
+                        )
                         if (closedTodayHours != null) {
                             Text(
                                 "Today · ${formatHours(closedTodayHours)}",
@@ -1376,5 +1408,64 @@ private fun HomeClockPickerDialog(
         }
     )
 }
+
+
+/** Quiet dashed Start · Stop caption under primary cluster (1.3.42). */
+@Composable
+private fun HomeQuietSecondaryTimes(
+    startLabel: String,
+    stopLabel: String,
+    visible: Boolean,
+    onStartClick: () -> Unit,
+    onStopClick: () -> Unit
+) {
+    if (!visible) return
+    val dashColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    Row(
+        modifier = Modifier
+            .padding(top = 14.dp)
+            .semantics { contentDescription = "Secondary start stop times" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        QuietTimeChip(label = startLabel, dashColor = dashColor, onClick = onStartClick)
+        Text(
+            "·",
+            style = MaterialTheme.typography.labelMedium,
+            color = dashColor
+        )
+        QuietTimeChip(label = stopLabel, dashColor = dashColor, onClick = onStopClick)
+    }
+}
+
+@Composable
+private fun QuietTimeChip(
+    label: String,
+    dashColor: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit
+) {
+    Text(
+        label.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .semantics { contentDescription = label }
+            .clickable(onClick = onClick)
+            .drawBehind {
+                val stroke = Stroke(
+                    width = 1.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 5f), 0f)
+                )
+                drawRoundRect(
+                    color = dashColor,
+                    style = stroke,
+                    cornerRadius = CornerRadius(size.minDimension / 2f)
+                )
+            }
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    )
+}
+
 
 fun formatHours(hours: Double): String = HoursCalc.formatHours(hours)

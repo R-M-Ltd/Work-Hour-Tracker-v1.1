@@ -25,6 +25,7 @@ import com.rmltd.workhourstracker.ui.navigation.AppNavHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import android.widget.Toast
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -32,10 +33,14 @@ import com.rmltd.workhourstracker.data.AppearanceMode
 import com.rmltd.workhourstracker.ui.theme.WorkHoursTheme
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModel
 import com.rmltd.workhourstracker.viewmodel.WorkHoursViewModelFactory
+import com.rmltd.workhourstracker.widget.WorkHoursWidgetUpdater
 
 class MainActivity : ComponentActivity() {
 
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Widget tap requests Edit today sheet once AppNavHost is ready. */
+    private val openEditTodayRequests = MutableStateFlow(0)
 
     private val viewModel: WorkHoursViewModel by viewModels {
         WorkHoursViewModelFactory(
@@ -75,6 +80,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycle.addObserver(lifecycleRefreshObserver)
         handleOAuthIntent(intent)
+        consumeOpenEditTodayExtra(intent)
         setContent {
             val colorTheme by viewModel.colorTheme.collectAsState()
             val fontStyle by viewModel.fontStyle.collectAsState()
@@ -92,7 +98,11 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                AppNavHost(viewModel = viewModel)
+                val editTodayTick by openEditTodayRequests.collectAsState()
+                AppNavHost(
+                    viewModel = viewModel,
+                    openEditTodayTick = editTodayTick
+                )
             }
         }
     }
@@ -101,6 +111,14 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleOAuthIntent(intent)
+        consumeOpenEditTodayExtra(intent)
+    }
+
+    private fun consumeOpenEditTodayExtra(intent: Intent?) {
+        if (intent?.getBooleanExtra(WorkHoursWidgetUpdater.EXTRA_OPEN_EDIT_TODAY, false) == true) {
+            intent.removeExtra(WorkHoursWidgetUpdater.EXTRA_OPEN_EDIT_TODAY)
+            openEditTodayRequests.value = openEditTodayRequests.value + 1
+        }
     }
 
     private fun handleOAuthIntent(intent: Intent?) {

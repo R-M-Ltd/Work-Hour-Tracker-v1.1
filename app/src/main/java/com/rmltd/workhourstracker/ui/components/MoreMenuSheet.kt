@@ -16,11 +16,8 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,25 +37,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * Grouped More sheet (1.3.40): Today / Log & pay / App.
- * Placement only — lunch stays nav-only unpaid; typed Add/Change behavior unchanged.
+ * Grouped More sheet (1.3.42): Day · Pay · Settings.
+ * Edit today merges Add/Change + Set today's times. History + Settings root dropped
+ * (History stays on bottom bar; section deep-links remain).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoreMenuSheet(
     forgotClockOutEnabled: Boolean,
     onDismiss: () -> Unit,
-    onAddChangeHours: () -> Unit,
+    onEditToday: () -> Unit,
     onLogLunch: () -> Unit,
-    onSetTodaysTimes: () -> Unit,
     onForgotClockOut: () -> Unit,
-    onHistory: () -> Unit,
     onExport: () -> Unit,
     onRatesAndGoals: () -> Unit,
     onAppearance: () -> Unit,
     onBackupAndCloud: () -> Unit,
-    onRemindersAndShade: () -> Unit,
-    onSettings: () -> Unit
+    onRemindersAndShade: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -80,24 +75,18 @@ fun MoreMenuSheet(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
-            SectionHeader("Today")
+            SectionHeader("Day")
             MoreRow(
                 icon = Icons.Filled.Edit,
-                title = "Add / Change hours",
-                subtitle = "Manual typed entry sheet",
-                onClick = onAddChangeHours
+                title = "Edit today",
+                subtitle = "Add / change hours · set times",
+                onClick = onEditToday
             )
             MoreRow(
                 icon = Icons.Filled.Restaurant,
                 title = "Log lunch / break",
                 subtitle = "Nav-only · unpaid default",
                 onClick = onLogLunch
-            )
-            MoreRow(
-                icon = Icons.Filled.Schedule,
-                title = "Set today's times…",
-                subtitle = "Clocks + hours sheet",
-                onClick = onSetTodaysTimes
             )
             MoreRow(
                 icon = Icons.Filled.SwapHoriz,
@@ -111,13 +100,7 @@ fun MoreMenuSheet(
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             Spacer(Modifier.height(8.dp))
 
-            SectionHeader("Log & pay")
-            MoreRow(
-                icon = Icons.Filled.History,
-                title = "History",
-                subtitle = "Also on bottom bar · search · day detail",
-                onClick = onHistory
-            )
+            SectionHeader("Pay")
             MoreRow(
                 icon = Icons.Filled.Share,
                 title = "Export",
@@ -135,7 +118,7 @@ fun MoreMenuSheet(
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             Spacer(Modifier.height(8.dp))
 
-            SectionHeader("App")
+            SectionHeader("Settings")
             MoreRow(
                 icon = Icons.Filled.Brightness6,
                 title = "Appearance",
@@ -153,12 +136,6 @@ fun MoreMenuSheet(
                 title = "Reminders & shade",
                 subtitle = "EOD · notification shade",
                 onClick = onRemindersAndShade
-            )
-            MoreRow(
-                icon = Icons.Filled.Settings,
-                title = "Settings",
-                subtitle = "Full settings",
-                onClick = onSettings
             )
         }
     }

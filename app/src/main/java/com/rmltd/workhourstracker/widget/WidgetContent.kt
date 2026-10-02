@@ -55,15 +55,11 @@ object WidgetContent {
             kind == ClockDayState.Kind.OPEN && todayIn != null && sessionPaused ->
                 "Paused · since ${HoursCalc.formatClock(todayIn)}"
             kind == ClockDayState.Kind.OPEN && todayIn != null ->
-                "Clocked in since ${HoursCalc.formatClock(todayIn)}"
-            kind == ClockDayState.Kind.CLOSED -> {
-                val range = HoursCalc.formatRange(todayIn, todayOut)
-                if (range != null) {
-                    "Completed · $range · ${HoursCalc.formatHours(todayHoursWorked)}"
-                } else {
-                    "Completed · ${HoursCalc.formatHours(todayHoursWorked)}"
-                }
-            }
+                "Start ${HoursCalc.formatClock(todayIn)} · Stop —"
+            kind == ClockDayState.Kind.CLOSED && todayIn != null && todayOut != null ->
+                "Start ${HoursCalc.formatClock(todayIn)} · Stop ${HoursCalc.formatClock(todayOut)}"
+            kind == ClockDayState.Kind.CLOSED ->
+                "Completed · ${HoursCalc.formatHours(todayHoursWorked)}"
             kind == ClockDayState.Kind.LEGACY_CLOSED ->
                 "Completed · ${HoursCalc.formatHours(todayHoursWorked)}"
             else -> "Not clocked in"

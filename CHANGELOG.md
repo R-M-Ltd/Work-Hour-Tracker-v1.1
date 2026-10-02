@@ -3,6 +3,16 @@
 Shipped versions for Work Hours Tracker (`com.rmltd.workhourstracker`).
 Format: features and fixes by release, newest first.
 
+## 1.3.42 (versionCode 44)
+
+Manual times + More simplify on tip `2494584` (1.3.41 / vc 43). Design pack `ui-rebuild-1.3.42`.
+
+- **A Home:** Quiet secondary Start · Stop / since chips under Idle-partial, Running, and Paused (dashed caption — not peer to Clock-in or elapsed). Pure EMPTY idle omits chips. Tap opens shared `AddChangeHoursSheet` titled **Edit today**; mid-shift Start rewrite uses `updateOpenClockIn`; Stop-while-open uses Forgot-family `clockOutAt` (clears pause prefs).
+- **A Widget:** Status shows `Start {in} · Stop —` when running, keeps `Paused · since {in}` + `pauseFreezeMinutes`, CLOSED shows `Start {in} · Stop {out}`. Whole-widget tap sets `EXTRA_OPEN_EDIT_TODAY` → Home Edit today sheet. No RemoteViews punch farm.
+- **B More:** Groups **Day · Pay · Settings**. Merge Add/Change + Set today's times → **Edit today**. Drop History row (tab stays) and Settings root row. Keep lunch nav-only unpaid + Forgot. Keep 1.3.41 SettingsSection deep-links.
+
+Protected: Lunch CTA nav-only, EOD Open-app-only / `end_of_day_reminder`, CSV/PDF schema, locked hexes / splash `#5B3F9E` / Arc, D1–D4, cloud-off, onboarding 1.3.37, typed hours / equal in·out / S3 / S4, Nav A / Idle B / Running A / Paused / More-as-sheet, pause ≠ close OPEN, shade clears pause prefs, 1.3.41 deep-links + widget freeze.
+
 ## 1.3.41 (versionCode 43)
 
 Lows + conflict sweep on tip `7f1f7e5` (1.3.40 / vc 42). Design pack `ui-rebuild-1.3.41`.

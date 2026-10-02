@@ -54,13 +54,19 @@ class TimerFirstHomeProtectTest {
     @Test
     fun moreSheetGroupedSections() {
         val more = read("ui/components/MoreMenuSheet.kt")
-        assertTrue(more.contains("\"Today\""))
-        assertTrue(more.contains("Log & pay") || more.contains("\"Log & pay\"") || more.contains("Log & pay".uppercase()) || more.contains("LOG & PAY") || more.contains("SectionHeader(\"Log & pay\")"))
-        assertTrue(more.contains("SectionHeader(\"App\")") || more.contains("\"App\""))
-        assertTrue(more.contains("Add / Change hours"))
+        assertTrue(more.contains("SectionHeader(\"Day\")") || more.contains("\"Day\""))
+        assertTrue(more.contains("SectionHeader(\"Pay\")") || more.contains("\"Pay\""))
+        assertTrue(more.contains("SectionHeader(\"Settings\")") || more.contains("\"Settings\""))
+        assertTrue(more.contains("Edit today"))
         assertTrue(more.contains("Rates & goals"))
         assertTrue(more.contains("Log lunch / break"))
         assertTrue(more.contains("Nav-only"))
+        assertFalse("History row must be dropped from More", more.contains("title = \"History\""))
+        assertFalse("Settings root row must be dropped", more.contains("title = \"Settings\""))
+        assertFalse(more.contains("title = \"Add / Change hours\""))
+        assertFalse(more.contains("title = \"Set today's times"))
+        assertFalse(more.contains("onHistory"))
+        assertFalse(more.contains("onSettings"))
     }
 
     @Test
@@ -77,20 +83,21 @@ class TimerFirstHomeProtectTest {
     @Test
     fun lunchCtaStillNavOnlyFromMore() {
         val nav = read("ui/navigation/AppNavigation.kt")
-        val lunchBlock = nav.substringAfter("onLogLunch = {").substringBefore("onSetTodaysTimes")
+        val moreBlock = nav.substringAfter("MoreMenuSheet(").substringBefore("onExport")
+        val lunchBlock = moreBlock.substringAfter("onLogLunch = {").substringBefore("onForgotClockOut")
         assertTrue(lunchBlock.contains("Routes.entry(LocalDate.now())"))
         assertFalse(lunchBlock.contains("saveEntry"))
         assertFalse(lunchBlock.contains("breakPaid = true"))
     }
 
     @Test
-    fun versionIs1341Vc43() {
+    fun versionIs1342Vc44() {
         val gradle = listOf(
             File("build.gradle.kts"),
             File("app/build.gradle.kts")
         ).first { it.exists() }.readText()
-        assertTrue(gradle.contains("versionName = \"1.3.41\""))
-        assertTrue(gradle.contains("versionCode = 43"))
+        assertTrue(gradle.contains("versionName = \"1.3.42\""))
+        assertTrue(gradle.contains("versionCode = 44"))
     }
 
     @Test
@@ -110,12 +117,38 @@ class TimerFirstHomeProtectTest {
         assertTrue(nav.contains("openSettingsFromMore(SettingsSection.APPEARANCE)"))
         assertTrue(nav.contains("openSettingsFromMore(SettingsSection.BACKUP_CLOUD)"))
         assertTrue(nav.contains("openSettingsFromMore(SettingsSection.REMINDERS_SHADE)"))
-        assertTrue(nav.contains("openSettingsFromMore(null)"))
+        // Settings root row dropped in 1.3.42 — deep-links only
+        assertFalse(nav.contains("onSettings = { openSettingsFromMore(null) }"))
+        assertTrue(nav.contains("HomeMoreAction.EDIT_TODAY"))
         assertTrue(nav.contains("initialSection = initialSection"))
         val settings = read("ui/screens/SettingsScreen.kt")
         assertTrue(settings.contains("initialSection: SettingsSection?"))
         assertTrue(settings.contains("SettingsSection.EXPORT"))
         assertTrue(settings.contains("animateScrollTo"))
+    }
+
+    @Test
+    fun homeSecondaryTimesWired() {
+        val home = read("ui/screens/HomeScreen.kt")
+        assertTrue(home.contains("HomeQuietSecondaryTimes"))
+        assertTrue(home.contains("HomeSecondaryTimes.shouldShow"))
+        assertTrue(home.contains("HomeMoreAction.EDIT_TODAY"))
+        assertTrue(home.contains("\"Edit today\""))
+        assertTrue(home.contains("showForgotClockOut = true"))
+    }
+
+    @Test
+    fun widgetTapOpensEditToday() {
+        val updater = read("widget/WorkHoursWidgetUpdater.kt")
+        assertTrue(updater.contains("EXTRA_OPEN_EDIT_TODAY"))
+        assertTrue(updater.contains("putExtra(EXTRA_OPEN_EDIT_TODAY, true)"))
+        val main = read("MainActivity.kt")
+        assertTrue(main.contains("EXTRA_OPEN_EDIT_TODAY"))
+        assertTrue(main.contains("openEditTodayTick"))
+        val content = read("widget/WidgetContent.kt")
+        assertTrue(content.contains("Start "))
+        assertTrue(content.contains("Stop —"))
+        assertTrue(content.contains("Paused · since"))
     }
 
     @Test

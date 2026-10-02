@@ -40,7 +40,8 @@ class WidgetContentTest {
             weekGoalHours = 40.0,
             nowMinutes = noon
         )
-        assertTrue(d.statusLine.startsWith("Clocked in since"))
+        assertTrue(d.statusLine.startsWith("Start "))
+        assertTrue(d.statusLine.contains("Stop —"))
         assertTrue(d.statusLine.contains("9:00"))
         assertEquals("Today: 3.00h", d.todayLine)
         assertTrue(d.openSession)
@@ -57,8 +58,10 @@ class WidgetContentTest {
             weekGoalHours = 40.0,
             nowMinutes = noon
         )
-        assertTrue(d.statusLine.startsWith("Completed"))
-        assertTrue(d.statusLine.contains("8.00h"))
+        assertTrue(d.statusLine.startsWith("Start "))
+        assertTrue(d.statusLine.contains("Stop "))
+        assertTrue(d.statusLine.contains("9:00"))
+        assertTrue(d.statusLine.contains("5:00"))
         assertEquals("Today: 8.00h", d.todayLine)
         assertFalse(d.openSession)
         assertEquals("Week 8.00h / 40.00h", d.weekLine)
@@ -107,7 +110,8 @@ class WidgetContentTest {
             weekGoalHours = 40.0,
             nowMinutes = noon
         )
-        assertTrue(d.statusLine.startsWith("Clocked in since"))
+        assertTrue(d.statusLine.startsWith("Start "))
+        assertTrue(d.statusLine.contains("Stop —"))
         assertFalse(d.statusLine.contains("Overnight"))
         assertEquals("Today: 3.00h", d.todayLine)
     }
@@ -123,7 +127,8 @@ class WidgetContentTest {
             weekGoalHours = 40.0,
             nowMinutes = noon
         )
-        assertTrue(d.statusLine.startsWith("Completed"))
+        assertTrue(d.statusLine.startsWith("Start "))
+        assertTrue(d.statusLine.contains("Stop "))
         assertFalse(d.statusLine.contains("Overnight"))
     }
 
@@ -175,7 +180,8 @@ class WidgetContentTest {
             pauseFreezeMinutes = noon,
             sessionPaused = false
         )
-        assertTrue(d.statusLine.startsWith("Clocked in since"))
+        assertTrue(d.statusLine.startsWith("Start "))
+        assertTrue(d.statusLine.contains("Stop —"))
         assertEquals("Today: 3.00h", d.todayLine)
         assertTrue(d.openSession)
     }

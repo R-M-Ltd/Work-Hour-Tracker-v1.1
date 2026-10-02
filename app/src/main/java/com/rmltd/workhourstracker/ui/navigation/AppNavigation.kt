@@ -13,6 +13,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,7 +86,9 @@ object MainTabs {
 @Composable
 fun AppNavHost(
     viewModel: WorkHoursViewModel,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    /** Non-zero tick from MainActivity when widget requests Edit today. */
+    openEditTodayTick: Int = 0
 ) {
     val context = LocalContext.current
     // Read once before NavHost so Home is not the startDestination underneath onboarding.
@@ -111,6 +114,15 @@ fun AppNavHost(
             }
             launchSingleTop = true
             restoreState = true
+        }
+    }
+
+    LaunchedEffect(openEditTodayTick) {
+        if (openEditTodayTick > 0) {
+            showMoreSheet = false
+            moreSelected = false
+            navigateTab(Routes.HOME)
+            homeMoreAction = HomeMoreAction.EDIT_TODAY
         }
     }
 
@@ -259,22 +271,16 @@ fun AppNavHost(
                 showMoreSheet = false
                 moreSelected = false
             },
-            onAddChangeHours = {
+            onEditToday = {
                 showMoreSheet = false
                 moreSelected = false
                 navigateTab(Routes.HOME)
-                homeMoreAction = HomeMoreAction.ADD_CHANGE_HOURS
+                homeMoreAction = HomeMoreAction.EDIT_TODAY
             },
             onLogLunch = {
                 showMoreSheet = false
                 moreSelected = false
                 navController.navigate(Routes.entry(LocalDate.now()))
-            },
-            onSetTodaysTimes = {
-                showMoreSheet = false
-                moreSelected = false
-                navigateTab(Routes.HOME)
-                homeMoreAction = HomeMoreAction.SET_TODAYS_TIMES
             },
             onForgotClockOut = {
                 showMoreSheet = false
@@ -282,17 +288,11 @@ fun AppNavHost(
                 navigateTab(Routes.HOME)
                 homeMoreAction = HomeMoreAction.FORGOT_CLOCK_OUT
             },
-            onHistory = {
-                showMoreSheet = false
-                moreSelected = false
-                navigateTab(Routes.LOG)
-            },
             onExport = { openSettingsFromMore(SettingsSection.EXPORT) },
             onRatesAndGoals = { openSettingsFromMore(SettingsSection.RATES_GOALS) },
             onAppearance = { openSettingsFromMore(SettingsSection.APPEARANCE) },
             onBackupAndCloud = { openSettingsFromMore(SettingsSection.BACKUP_CLOUD) },
-            onRemindersAndShade = { openSettingsFromMore(SettingsSection.REMINDERS_SHADE) },
-            onSettings = { openSettingsFromMore(null) }
+            onRemindersAndShade = { openSettingsFromMore(SettingsSection.REMINDERS_SHADE) }
         )
     }
 }
